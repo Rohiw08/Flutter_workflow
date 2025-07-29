@@ -100,10 +100,12 @@ class _MiniMapPainter extends CustomPainter {
       Offset.zero,
     );
     final viewportSize = Size(
-      size.width / controller.transformationController.value.getMaxScaleOnAxis(),
-      size.height / controller.transformationController.value.getMaxScaleOnAxis(),
+      size.width /
+          controller.transformationController.value.getMaxScaleOnAxis(),
+      size.height /
+          controller.transformationController.value.getMaxScaleOnAxis(),
     );
-    
+
     final miniMapViewPort = Rect.fromLTWH(
         -viewportRect.dx * scale,
         -viewportRect.dy * scale,

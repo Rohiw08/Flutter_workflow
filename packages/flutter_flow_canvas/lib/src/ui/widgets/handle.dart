@@ -63,10 +63,7 @@ class _HandleState extends ConsumerState<Handle> {
   void _onPanStart(DragStartDetails details) {
     final controller = ref.read(flowControllerProvider);
     controller.startConnection(
-      widget.nodeId,
-      widget.id,
-      details.globalPosition,
-    );
+        widget.nodeId, widget.id, details.globalPosition);
   }
 
   @override

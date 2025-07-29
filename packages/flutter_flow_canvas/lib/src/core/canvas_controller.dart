@@ -5,6 +5,8 @@ import 'models/connection_state.dart';
 import 'models/edge.dart';
 import 'models/node.dart';
 
+enum DragMode { none, canvas, node, selection }
+
 /// The central controller for managing the state of the flow canvas.
 class FlowCanvasController extends ChangeNotifier {
   final List<FlowNode> _nodes = [];
@@ -12,13 +14,13 @@ class FlowCanvasController extends ChangeNotifier {
   final Map<String, Widget> _nodeBuilders = {};
   final Map<String, GlobalKey> _nodeKeys = {};
 
-  // State for handles and connections
   final Map<String, GlobalKey> handleRegistry = {};
-  FlowConnectionState? connection; // Using the corrected model name
+  FlowConnectionState? connection;
 
   TransformationController transformationController =
       TransformationController();
   Rect? selectionRect;
+  DragMode dragMode = DragMode.none;
 
   List<FlowNode> get nodes => _nodes;
   List<FlowEdge> get edges => _edges;
@@ -47,7 +49,6 @@ class FlowCanvasController extends ChangeNotifier {
   }
 
   // --- Handle and Connection Management ---
-
   void registerHandle(String nodeId, String handleId, GlobalKey key) {
     handleRegistry['$nodeId/$handleId'] = key;
   }
@@ -57,12 +58,8 @@ class FlowCanvasController extends ChangeNotifier {
   }
 
   void startConnection(
-    String fromNodeId,
-    String fromHandleId,
-    Offset startPosition,
-  ) {
+      String fromNodeId, String fromHandleId, Offset startPosition) {
     connection = FlowConnectionState(
-      // Using the corrected model name
       fromNodeId: fromNodeId,
       fromHandleId: fromHandleId,
       startPosition: startPosition,
@@ -80,19 +77,16 @@ class FlowCanvasController extends ChangeNotifier {
       final renderBox =
           entry.value.currentContext?.findRenderObject() as RenderBox?;
       if (renderBox != null &&
-          renderBox.hitTest(
-            BoxHitTestResult(),
-            position: renderBox.globalToLocal(globalPosition),
-          )) {
-        // Prevent connecting a source handle to itself
-        if ('$connection.fromNodeId/$connection.fromHandleId' != entry.key) {
+          renderBox.hitTest(BoxHitTestResult(),
+              position: renderBox.globalToLocal(globalPosition))) {
+        if ('${connection!.fromNodeId}/${connection!.fromHandleId}' !=
+            entry.key) {
           hoveredKey = entry.key;
           break;
         }
       }
     }
     connection!.hoveredTargetKey = hoveredKey;
-
     _notify();
   }
 
@@ -113,72 +107,59 @@ class FlowCanvasController extends ChangeNotifier {
     _notify();
   }
 
-  // --- Interaction Handlers ---
-
-  void onCanvasTapUp(TapUpDetails details) {
-    final canvasOffset = transformationController.toScene(
-      details.localPosition,
-    );
-    bool hitNode = false;
-    for (int i = _nodes.length - 1; i >= 0; i--) {
-      final node = _nodes[i];
-      if (node.rect.contains(canvasOffset)) {
-        _handleNodeSelection(node.id, !node.isSelected);
-        hitNode = true;
-        break;
-      }
-    }
-
-    if (!hitNode) {
-      deselectAll();
-    }
-    _notify();
-  }
+  // --- Gesture Handling ---
 
   void onPanStart(DragStartDetails details) {
-    final canvasOffset = transformationController.toScene(
-      details.localPosition,
-    );
-    selectionRect = Rect.fromPoints(canvasOffset, canvasOffset);
+    final canvasOffset =
+        transformationController.toScene(details.localPosition);
+
+    final hitNode = _nodes.lastWhere((n) => n.rect.contains(canvasOffset),
+        orElse: () => FlowNode(
+            id: '', position: Offset.zero, size: Size.zero, data: NodeData()));
+
+    if (hitNode.id.isNotEmpty) {
+      dragMode = DragMode.node;
+      if (!hitNode.isSelected) {
+        deselectAll(notify: false);
+        hitNode.isSelected = true;
+      }
+    } else {
+      dragMode = DragMode.selection;
+      deselectAll(notify: false);
+      selectionRect = Rect.fromPoints(canvasOffset, canvasOffset);
+    }
     _notify();
   }
 
   void onPanUpdate(DragUpdateDetails details) {
-    final canvasOffset = transformationController.toScene(
-      details.localPosition,
-    );
-    if (selectionRect != null) {
+    final scale = transformationController.value.getMaxScaleOnAxis();
+    final scaledDelta = details.delta / scale;
+    final canvasOffset =
+        transformationController.toScene(details.localPosition);
+
+    if (dragMode == DragMode.node) {
+      for (var node in _nodes) {
+        if (node.isSelected) {
+          node.position += scaledDelta;
+        }
+      }
+    } else if (dragMode == DragMode.selection && selectionRect != null) {
       selectionRect = Rect.fromPoints(selectionRect!.topLeft, canvasOffset);
       _updateSelection();
-      _notify();
     }
-  }
-
-  void onPanEnd(DragEndDetails details) {
-    selectionRect = null;
     _notify();
   }
 
-  // --- Selection Logic ---
-
-  void _handleNodeSelection(String nodeId, bool selected) {
-    final node = _nodes.firstWhere((n) => n.id == nodeId);
-    if (node.isSelected != selected) {
-      if (selected) {
-        deselectAll(notify: false);
-      }
-      node.isSelected = selected;
-      _notify();
-    }
+  void onPanEnd(DragEndDetails details) {
+    dragMode = DragMode.none;
+    selectionRect = null;
+    _notify();
   }
 
   void _updateSelection() {
     if (selectionRect == null) return;
     for (var node in _nodes) {
-      final selected = selectionRect!.overlaps(node.rect);
-      if (node.isSelected != selected) {
-        node.isSelected = selected;
-      }
+      node.isSelected = selectionRect!.overlaps(node.rect);
     }
   }
 
@@ -193,9 +174,8 @@ class FlowCanvasController extends ChangeNotifier {
 
   void _cacheNodeWidget(String nodeId) async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final boundary =
-          _nodeKeys[nodeId]?.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
+      final boundary = _nodeKeys[nodeId]?.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
       if (boundary == null) return;
 
       final image = await boundary.toImage(pixelRatio: 2.0);
@@ -209,11 +189,9 @@ class FlowCanvasController extends ChangeNotifier {
     });
   }
 
-  /// This method provides the off-screen widgets for caching.
   List<Widget> buildOffstageWidgets() {
     return _nodes.where((node) => node.needsRepaint).map((node) {
       return Offstage(
-        offstage: false,
         child: RepaintBoundary(
           key: _nodeKeys[node.id],
           child: _nodeBuilders[node.id],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_workflow/flutter_flow_canvas.dart';
-import 'package:flutter_workflow/src/utils/edge_path_creator.dart';
+import '../../../core/canvas_controller.dart';
+import '../../../core/models/edge.dart';
+import '../../../utils/edge_path_creator.dart';
 
 class FlowPainter extends CustomPainter {
   final FlowCanvasController controller;
@@ -12,11 +13,8 @@ class FlowPainter extends CustomPainter {
     if (key?.currentContext != null) {
       final renderBox = key!.currentContext!.findRenderObject() as RenderBox;
       final size = renderBox.size;
-      // Get the center of the handle widget
-      final position = renderBox.localToGlobal(
-        Offset(size.width / 2, size.height / 2),
-      );
-      // Convert the global screen position to a position on the canvas scene
+      final position =
+          renderBox.localToGlobal(Offset(size.width / 2, size.height / 2));
       return controller.transformationController.toScene(position);
     }
     return null;
@@ -25,7 +23,9 @@ class FlowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final matrix = controller.transformationController.value;
-    canvas.transform(matrix.storage);
+    final screenRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final canvasRect =
+        MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
     // Draw edges
     final edgePaint = Paint()
@@ -46,46 +46,41 @@ class FlowPainter extends CustomPainter {
     // Draw in-progress connection
     if (controller.connection != null) {
       final connection = controller.connection!;
-      // The start position is already in global coordinates, convert to scene
-      final start = controller.transformationController.toScene(
-        connection.startPosition,
-      );
-      // The end position is also global, convert to scene
-      final end = controller.transformationController.toScene(
-        connection.endPosition,
-      );
+      final start =
+          controller.transformationController.toScene(connection.startPosition);
+      final end =
+          controller.transformationController.toScene(connection.endPosition);
       final path = EdgePathCreator.createPath(EdgeType.bezier, start, end);
       canvas.drawPath(path, edgePaint..color = Colors.blueAccent);
     }
 
     // Draw nodes (cached images)
     for (final node in controller.nodes) {
+      // Viewport Culling
+      if (!canvasRect.overlaps(node.rect)) {
+        continue;
+      }
       if (node.cachedImage != null) {
         canvas.drawImage(node.cachedImage!, node.position, Paint());
       }
 
-      // Draw selection border and resize handles
       if (node.isSelected) {
         final borderPaint = Paint()
           ..color = Colors.blue
-          ..strokeWidth = 2.0
+          ..strokeWidth = 2.0 / matrix.getMaxScaleOnAxis()
           ..style = PaintingStyle.stroke;
         canvas.drawRect(node.rect.inflate(2.0), borderPaint);
-
-        // Draw resize handles (simple circles for now)
-        final handlePaint = Paint()..color = Colors.blue;
-        canvas.drawCircle(node.rect.bottomRight, 6, handlePaint);
       }
     }
 
     // Draw selection rectangle
     if (controller.selectionRect != null) {
       final selectionPaint = Paint()
-        ..color = Colors.blue[50]!
+        ..color = Colors.blue.withOpacity(0.2)
         ..style = PaintingStyle.fill;
       final borderPaint = Paint()
         ..color = Colors.blue
-        ..strokeWidth = 1.0
+        ..strokeWidth = 1.0 / matrix.getMaxScaleOnAxis()
         ..style = PaintingStyle.stroke;
       canvas.drawRect(controller.selectionRect!, selectionPaint);
       canvas.drawRect(controller.selectionRect!, borderPaint);

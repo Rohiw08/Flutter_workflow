@@ -30,19 +30,11 @@ class EdgePathCreator {
   static Path _createBezierPath(Offset start, Offset end) {
     final path = Path();
     path.moveTo(start.dx, start.dy);
-    final controlPoint1 = Offset(
-      start.dx + (end.dx - start.dx) * 0.5,
-      start.dy,
-    );
+    final controlPoint1 =
+        Offset(start.dx + (end.dx - start.dx) * 0.5, start.dy);
     final controlPoint2 = Offset(start.dx + (end.dx - start.dx) * 0.5, end.dy);
-    path.cubicTo(
-      controlPoint1.dx,
-      controlPoint1.dy,
-      controlPoint2.dx,
-      controlPoint2.dy,
-      end.dx,
-      end.dy,
-    );
+    path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx,
+        controlPoint2.dy, end.dx, end.dy);
     return path;
   }
 }

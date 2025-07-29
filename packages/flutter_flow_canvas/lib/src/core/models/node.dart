@@ -18,9 +18,6 @@ class FlowNode {
   ui.Image? cachedImage;
   bool needsRepaint = true;
 
-  // A map to store the global keys of handles for edge connections
-  final Map<String, GlobalKey> handleKeys = {};
-
   FlowNode({
     required this.id,
     required this.position,
@@ -32,16 +29,19 @@ class FlowNode {
   Rect get rect =>
       Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
 
-  FlowNode copyWith({Offset? position, Size? size, bool? isSelected}) {
+  FlowNode copyWith({
+    Offset? position,
+    Size? size,
+    bool? isSelected,
+  }) {
     return FlowNode(
-        id: id,
-        position: position ?? this.position,
-        size: size ?? this.size,
-        data: data,
-        isSelected: isSelected ?? this.isSelected,
-      )
+      id: id,
+      position: position ?? this.position,
+      size: size ?? this.size,
+      data: data,
+      isSelected: isSelected ?? this.isSelected,
+    )
       ..cachedImage = cachedImage
-      ..needsRepaint = needsRepaint
-      ..handleKeys.addAll(handleKeys);
+      ..needsRepaint = needsRepaint;
   }
 }

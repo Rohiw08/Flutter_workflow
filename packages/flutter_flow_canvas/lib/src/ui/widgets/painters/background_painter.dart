@@ -15,7 +15,7 @@ class BackgroundPainter extends CustomPainter {
     required this.matrix,
     this.variant = BackgroundVariant.dots,
     this.gap = 30.0,
-    this.color = Colors.black,
+    this.color = Colors.black12,
     this.lineWidth = 1.0,
   });
 
@@ -25,16 +25,10 @@ class BackgroundPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = lineWidth;
 
-    // The visible area on the screen
     final screenRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final canvasRect =
+        MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
-    // The corresponding area in the canvas's coordinate system
-    final canvasRect = MatrixUtils.transformRect(
-      matrix.clone()..invert(),
-      screenRect,
-    );
-
-    // Transform the canvas so we can draw in the canvas's coordinate system
     canvas.transform(matrix.storage);
 
     switch (variant) {
@@ -52,27 +46,17 @@ class BackgroundPainter extends CustomPainter {
 
   void _drawLines(Canvas canvas, Rect canvasRect, double gap, Paint paint) {
     paint.style = PaintingStyle.stroke;
-    for (
-      double x = canvasRect.left - canvasRect.left % gap;
-      x < canvasRect.right;
-      x += gap
-    ) {
+    for (double x = canvasRect.left - canvasRect.left % gap;
+        x < canvasRect.right;
+        x += gap) {
       canvas.drawLine(
-        Offset(x, canvasRect.top),
-        Offset(x, canvasRect.bottom),
-        paint,
-      );
+          Offset(x, canvasRect.top), Offset(x, canvasRect.bottom), paint);
     }
-    for (
-      double y = canvasRect.top - canvasRect.top % gap;
-      y < canvasRect.bottom;
-      y += gap
-    ) {
+    for (double y = canvasRect.top - canvasRect.top % gap;
+        y < canvasRect.bottom;
+        y += gap) {
       canvas.drawLine(
-        Offset(canvasRect.left, y),
-        Offset(canvasRect.right, y),
-        paint,
-      );
+          Offset(canvasRect.left, y), Offset(canvasRect.right, y), paint);
     }
   }
 
@@ -80,16 +64,12 @@ class BackgroundPainter extends CustomPainter {
     paint.style = PaintingStyle.fill;
     final double dotRadius = max(1.0, lineWidth);
 
-    for (
-      double x = canvasRect.left - canvasRect.left % gap;
-      x < canvasRect.right;
-      x += gap
-    ) {
-      for (
-        double y = canvasRect.top - canvasRect.top % gap;
-        y < canvasRect.bottom;
-        y += gap
-      ) {
+    for (double x = canvasRect.left - canvasRect.left % gap;
+        x < canvasRect.right;
+        x += gap) {
+      for (double y = canvasRect.top - canvasRect.top % gap;
+          y < canvasRect.bottom;
+          y += gap) {
         canvas.drawCircle(Offset(x, y), dotRadius, paint);
       }
     }
@@ -100,26 +80,16 @@ class BackgroundPainter extends CustomPainter {
     const double crossSize = 6.0;
     const double halfSize = crossSize / 2;
 
-    for (
-      double x = canvasRect.left - canvasRect.left % gap;
-      x < canvasRect.right;
-      x += gap
-    ) {
-      for (
-        double y = canvasRect.top - canvasRect.top % gap;
-        y < canvasRect.bottom;
-        y += gap
-      ) {
+    for (double x = canvasRect.left - canvasRect.left % gap;
+        x < canvasRect.right;
+        x += gap) {
+      for (double y = canvasRect.top - canvasRect.top % gap;
+          y < canvasRect.bottom;
+          y += gap) {
         canvas.drawLine(
-          Offset(x - halfSize, y),
-          Offset(x + halfSize, y),
-          paint,
-        );
+            Offset(x - halfSize, y), Offset(x + halfSize, y), paint);
         canvas.drawLine(
-          Offset(x, y - halfSize),
-          Offset(x, y + halfSize),
-          paint,
-        );
+            Offset(x, y - halfSize), Offset(x, y + halfSize), paint);
       }
     }
   }
