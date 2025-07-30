@@ -235,8 +235,8 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
                       boxShadow: (_isHovered || _isConnecting || isTargeted)
                           ? [
                               BoxShadow(
-                                color: _getHandleColor(isTargeted)
-                                    .withOpacity(0.4),
+                                color:
+                                    _getHandleColor(isTargeted).withAlpha(100),
                                 blurRadius: 8,
                                 spreadRadius: 2,
                               ),

@@ -60,12 +60,12 @@ class MiniMap extends ConsumerWidget {
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: backgroundColor.withOpacity(0.95),
+          color: backgroundColor.withAlpha(240),
           borderRadius: BorderRadius.circular(borderRadius),
           border: Border.all(color: Colors.grey.shade300, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withAlpha(25),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -102,7 +102,7 @@ class MiniMap extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withAlpha(180),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
@@ -124,7 +124,7 @@ class MiniMap extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withAlpha(180),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: ListenableBuilder(
@@ -267,7 +267,7 @@ class _MiniMapPainter extends CustomPainter {
 
   void _drawViewport(Canvas canvas, double scale) {
     final viewportPaint = Paint()
-      ..color = viewportColor.withOpacity(0.2)
+      ..color = viewportColor.withAlpha(50)
       ..style = PaintingStyle.fill;
 
     final viewportBorderPaint = Paint()

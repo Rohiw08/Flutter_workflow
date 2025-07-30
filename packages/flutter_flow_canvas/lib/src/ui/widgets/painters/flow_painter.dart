@@ -23,14 +23,37 @@ class FlowPainter extends CustomPainter {
     final canvasRect =
         MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
-    // Draw edges
+    // ================================= //
+    //           CHANGE START            //
+    // ================================= //
+
+    // Draw edges first
     _drawEdges(canvas, canvasRect);
+
+    // Then draw nodes on top
+    _drawNodes(canvas, canvasRect);
+
+    // ================================= //
+    //            CHANGE END             //
+    // ================================= //
 
     // Draw in-progress connection
     _drawConnection(canvas);
 
     // Draw selection rectangle
     _drawSelectionRect(canvas, matrix);
+  }
+
+  void _drawNodes(Canvas canvas, Rect canvasRect) {
+    final nodePaint = Paint();
+    for (final node in controller.nodes) {
+      if (node.cachedImage != null) {
+        // Culling check
+        if (!canvasRect.overlaps(node.rect.inflate(100))) continue;
+
+        canvas.drawImage(node.cachedImage!, node.position, nodePaint);
+      }
+    }
   }
 
   void _drawEdges(Canvas canvas, Rect canvasRect) {
@@ -121,7 +144,7 @@ class FlowPainter extends CustomPainter {
   void _drawSelectionRect(Canvas canvas, Matrix4 matrix) {
     if (controller.selectionRect != null) {
       final selectionPaint = Paint()
-        ..color = Colors.blue.withOpacity(0.1)
+        ..color = Colors.blue.withAlpha(25) // Using withAlpha as requested
         ..style = PaintingStyle.fill;
 
       canvas.drawRect(controller.selectionRect!, selectionPaint);

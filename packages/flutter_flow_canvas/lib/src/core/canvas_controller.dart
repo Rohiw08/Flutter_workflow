@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -123,6 +124,16 @@ class FlowCanvasController extends ChangeNotifier {
   /// Get all nodes in a given area
   List<FlowNode> getNodesInArea(Rect area) {
     return _nodes.where((node) => area.overlaps(node.rect)).toList();
+  }
+
+  /// Updates the cached image for a node
+  void updateNodeImage(String nodeId, ui.Image image) {
+    final node = getNode(nodeId);
+    if (node != null) {
+      node.cachedImage = image;
+      node.needsRepaint = false;
+      _notifyListeners();
+    }
   }
 
   // === EDGE MANAGEMENT ===

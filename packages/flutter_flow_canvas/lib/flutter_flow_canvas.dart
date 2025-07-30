@@ -9,6 +9,7 @@ export 'src/core/providers.dart';
 export 'src/ui/widgets/flow_canvas.dart';
 export 'src/ui/widgets/minimap.dart';
 export 'src/ui/widgets/handle.dart';
+export 'src/ui/widgets/flow_canvas_controls.dart';
 
 // Background painter export
 export 'src/ui/widgets/painters/background_painter.dart' show BackgroundVariant;

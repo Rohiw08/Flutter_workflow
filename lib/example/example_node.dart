@@ -91,8 +91,8 @@ class _ExampleNodeState extends State<ExampleNode>
                 boxShadow: [
                   BoxShadow(
                     color: isSelected
-                        ? Colors.blue.withOpacity(0.3)
-                        : Colors.black.withOpacity(_isHovered ? 0.15 : 0.1),
+                        ? Colors.blue.withAlpha(75)
+                        : Colors.black.withAlpha(_isHovered ? 25 : 15),
                     blurRadius: isSelected ? 15 : (_isHovered ? 12 : 8),
                     offset: Offset(0, isSelected ? 6 : (_isHovered ? 4 : 2)),
                     spreadRadius: isSelected ? 2 : 0,

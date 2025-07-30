@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/canvas_controller.dart';
 import '../../core/providers.dart';
+import 'flow_canvas_controls.dart';
 import 'painters/background_painter.dart';
 import 'painters/flow_painter.dart';
 
-/// Main FlowCanvas widget that renders the interactive node-based canvas
+// ... (FlowCanvas widget is unchanged)
 class FlowCanvas extends ConsumerStatefulWidget {
-  /// Background pattern variant
   final BackgroundVariant backgroundVariant;
-
-  /// Whether to show canvas controls
   final bool showControls;
-
-  /// Canvas background color
   final Color? backgroundColor;
-
-  /// Minimum scale factor for zooming
   final double minScale;
-
-  /// Maximum scale factor for zooming
   final double maxScale;
-
-  /// Whether the canvas is interactive
   final bool interactive;
-
-  /// Custom canvas size (defaults to controller settings)
   final Size? canvasSize;
 
   const FlowCanvas({
@@ -46,6 +35,7 @@ class FlowCanvas extends ConsumerStatefulWidget {
 class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   late FlowCanvasController controller;
   final FocusNode _focusNode = FocusNode();
+  final Map<String, GlobalKey> _nodeKeys = {};
 
   @override
   void initState() {
@@ -53,12 +43,20 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     if (widget.interactive) {
       _focusNode.requestFocus();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _captureNodeImages());
+  }
+
+  @override
+  void didUpdateWidget(covariant FlowCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _captureNodeImages());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     controller = ref.watch(flowControllerProvider);
+    _updateNodeKeys();
   }
 
   @override
@@ -67,12 +65,42 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     super.dispose();
   }
 
+  void _updateNodeKeys() {
+    final newKeys = <String, GlobalKey>{};
+    for (final node in controller.nodes) {
+      if (node.needsRepaint) {
+        newKeys[node.id] = _nodeKeys[node.id] ?? GlobalKey();
+      }
+    }
+    _nodeKeys.clear();
+    _nodeKeys.addAll(newKeys);
+  }
+
+  void _captureNodeImages() async {
+    if (!mounted) return;
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    for (final nodeId in _nodeKeys.keys) {
+      final boundary = _nodeKeys[nodeId]?.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary != null) {
+        final image = await boundary.toImage(pixelRatio: pixelRatio);
+        if (mounted) {
+          final node = controller.getNode(nodeId);
+          if (node != null) {
+            controller.updateNodeImage(nodeId, image);
+          }
+        }
+      }
+    }
+  }
+
   Size get _canvasSize =>
       widget.canvasSize ??
       Size(controller.canvasWidth, controller.canvasHeight);
 
   @override
   Widget build(BuildContext context) {
+    _updateNodeKeys();
     return Container(
       color: widget.backgroundColor,
       child:
@@ -152,22 +180,45 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
                       size: _canvasSize,
                     ),
 
-                    // Node layer - render nodes as positioned widgets
-                    ...controller.nodes.map((node) {
-                      final nodeWidget = controller.getNodeWidget(node.id);
-                      if (nodeWidget == null) return const SizedBox.shrink();
-
-                      return Positioned(
-                        left: node.position.dx,
-                        top: node.position.dy,
-                        child: nodeWidget,
-                      );
-                    }),
-
-                    // Edge and overlay layer
+                    // Main painter for nodes, edges, etc.
                     CustomPaint(
                       painter: FlowPainter(controller: controller),
                       size: _canvasSize,
+                    ),
+
+                    // Offstage stack for rendering nodes to images
+                    Offstage(
+                      offstage: true,
+                      child: Stack(
+                        children: [
+                          ...controller.nodes.where((n) => n.needsRepaint).map(
+                            (node) {
+                              final nodeWidget =
+                                  controller.getNodeWidget(node.id);
+                              if (nodeWidget == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return Positioned(
+                                left: node.position.dx,
+                                top: node.position.dy,
+                                child: RepaintBoundary(
+                                  key: _nodeKeys[node.id],
+                                  // ================================= //
+                                  //           CHANGE START            //
+                                  // ================================= //
+                                  child: Material(
+                                    type: MaterialType.transparency,
+                                    child: nodeWidget,
+                                  ),
+                                  // ================================= //
+                                  //            CHANGE END             //
+                                  // ================================= //
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 );
@@ -184,87 +235,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       top: 16,
       left: 16,
       child: FlowCanvasControls(controller: controller),
-    );
-  }
-}
-
-/// Canvas control buttons widget
-class FlowCanvasControls extends StatelessWidget {
-  final FlowCanvasController controller;
-
-  const FlowCanvasControls({
-    super.key,
-    required this.controller,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) {
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.zoom_in),
-                  onPressed: controller.zoomIn,
-                  tooltip: 'Zoom In',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.zoom_out),
-                  onPressed: controller.zoomOut,
-                  tooltip: 'Zoom Out',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.center_focus_strong),
-                  onPressed: controller.centerView,
-                  tooltip: 'Center View',
-                ),
-                if (controller.hasNodes)
-                  IconButton(
-                    icon: const Icon(Icons.fit_screen),
-                    onPressed: controller.fitView,
-                    tooltip: 'Fit View',
-                  ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Nodes: ${controller.nodes.length}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                if (controller.hasSelection) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Selected: ${controller.selectedNodes.length}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.blue.shade800,
-                          ),
-                    ),
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
     );
   }
 }
