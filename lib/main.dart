@@ -16,13 +16,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Flow Canvas Example',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: const Color(0xFFF0F2F5),
+    return ProviderScope(
+      overrides: [
+        flowControllerProvider.overrideWith((ref) => exampleController),
+      ],
+      child: MaterialApp(
+        title: 'Flutter Flow Canvas Example',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          scaffoldBackgroundColor: const Color(0xFFF0F2F5),
+        ),
+        home: const OptimizedExampleFlowCanvas(),
       ),
-      home: const OptimizedExampleFlowCanvas(),
     );
   }
 }
@@ -132,29 +137,23 @@ class _OptimizedExampleFlowCanvasState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ProviderScope(
-        overrides: [
-          // Provide the single controller instance to the widget tree.
-          flowControllerProvider.overrideWithValue(exampleController),
-        ],
-        child: Stack(
-          children: [
-            FlowCanvas(
-              backgroundVariant: _variant,
-              // Example of customizing the background
-              backgroundColor: const Color.fromARGB(255, 246, 223, 231),
+      body: Stack(
+        children: [
+          FlowCanvas(
+            backgroundVariant: _variant,
+            // Example of customizing the background
+            backgroundColor: const Color.fromARGB(255, 246, 223, 231),
 
-              // backgroundPainter: BackgroundPainter(
-              //   matrix: exampleController.transformationController.value,
-              //   variant: _variant,
-              //   color: Colors.grey.shade700,
-              //   gap: 40,
-              // ),
-            ),
-            // The MiniMap widget, assuming it exists in your package
-            const MiniMap(),
-          ],
-        ),
+            // backgroundPainter: BackgroundPainter(
+            //   matrix: exampleController.transformationController.value,
+            //   variant: _variant,
+            //   color: Colors.grey.shade700,
+            //   gap: 40,
+            // ),
+          ),
+          // The MiniMap widget, assuming it exists in your package
+          const MiniMap(),
+        ],
       ),
     );
   }

@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:vector_math/vector_math_64.dart' hide Colors;
 import '../../core/canvas_controller.dart';
 import '../../core/models/node.dart';
 import '../../core/providers.dart';

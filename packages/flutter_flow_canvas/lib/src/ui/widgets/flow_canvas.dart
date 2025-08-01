@@ -55,7 +55,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     controller = ref.watch(flowControllerProvider);
-    _updateNodeKeys();
+    _updateNodeKeys(controller);
   }
 
   @override
@@ -64,7 +64,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     super.dispose();
   }
 
-  void _updateNodeKeys() {
+  void _updateNodeKeys(FlowCanvasController controller) {
     final newKeys = <String, GlobalKey>{};
     for (final node in controller.nodes) {
       if (node.needsRepaint) {
@@ -93,21 +93,25 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     }
   }
 
-  Size get _canvasSize =>
+  Size _canvasSize(FlowCanvasController controller) =>
       widget.canvasSize ??
       Size(controller.canvasWidth, controller.canvasHeight);
 
   @override
   Widget build(BuildContext context) {
-    _updateNodeKeys();
+    // Get the controller here using ref.watch to subscribe to changes
+    final controller = ref.watch(flowControllerProvider);
+    _updateNodeKeys(controller); // Pass controller to helper methods
+
     return Container(
       color: widget.backgroundColor,
-      child:
-          widget.interactive ? _buildInteractiveCanvas() : _buildStaticCanvas(),
+      child: widget.interactive
+          ? _buildInteractiveCanvas(controller)
+          : _buildStaticCanvas(controller),
     );
   }
 
-  Widget _buildInteractiveCanvas() {
+  Widget _buildInteractiveCanvas(FlowCanvasController controller) {
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: (node, event) {
@@ -122,19 +126,19 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         },
         child: Stack(
           children: [
-            _buildCanvasContent(),
-            if (widget.showControls) _buildControls(),
+            _buildCanvasContent(controller),
+            if (widget.showControls) _buildControls(controller),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStaticCanvas() {
-    return _buildCanvasContent();
+  Widget _buildStaticCanvas(FlowCanvasController controller) {
+    return _buildCanvasContent(controller);
   }
 
-  Widget _buildCanvasContent() {
+  Widget _buildCanvasContent(FlowCanvasController controller) {
     return Listener(
       onPointerMove: widget.interactive
           ? (details) {
@@ -159,90 +163,86 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         panEnabled: widget.interactive,
         scaleEnabled: widget.interactive,
         child: SizedBox(
-          width: _canvasSize.width,
-          height: _canvasSize.height,
-          child: ListenableBuilder(
-            listenable: controller,
-            builder: (context, _) {
-              return Stack(
-                children: [
-                  // Background layer
-                  CustomPaint(
-                    size: Size.infinite,
-                    painter: BackgroundPainter(
-                        matrix: controller.transformationController.value,
-                        variant: BackgroundVariant.dots,
-                        gap: 30.0,
-                        dotRadius: 0.5,
-                        color: Colors.black54, // A subtle white for the dots
-                        fadeOnZoom: true,
-                        bgColor: const Color.fromARGB(255, 244, 210, 239)
-                            .withAlpha(112)),
+          width: _canvasSize(controller).width,
+          height: _canvasSize(controller).height,
+          child: Stack(
+            children: [
+              // Background layer
+              CustomPaint(
+                size: Size(controller.canvasHeight, controller.canvasWidth),
+                painter: BackgroundPainter(
+                    matrix: controller.transformationController.value,
+                    variant: BackgroundVariant.dots,
+                    gap: 30.0,
+                    dotRadius: 0.5,
+                    color: Colors.black54, // A subtle white for the dots
+                    fadeOnZoom: true,
+                    bgColor: const Color.fromARGB(255, 244, 210, 239)
+                        .withAlpha(112)),
+              ),
+
+              CustomPaint(
+                size: Size.infinite,
+                painter: FlowPainter(
+                    controller: controller), // ✅ Use FlowPainter here!
+              ),
+
+              // VISIBLE NODES LAYER - This was missing!
+              ...controller.nodes.map((node) {
+                final nodeWidget = controller.getNodeWidget(node.id);
+                if (nodeWidget == null) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  left: node.position.dx,
+                  top: node.position.dy,
+                  child: GestureDetector(
+                    onTap: () => controller.selectNode(node.id),
+                    onPanUpdate: (details) {
+                      setState(() {
+                        controller.dragNode(node.id, details.delta);
+                      });
+                    },
+                    child: nodeWidget,
                   ),
+                );
+              }),
 
-                  CustomPaint(
-                    size: Size.infinite,
-                    painter: FlowPainter(
-                        controller: controller), // ✅ Use FlowPainter here!
-                  ),
-
-                  // VISIBLE NODES LAYER - This was missing!
-                  ...controller.nodes.map((node) {
-                    final nodeWidget = controller.getNodeWidget(node.id);
-                    if (nodeWidget == null) {
-                      return const SizedBox.shrink();
-                    }
-                    return Positioned(
-                      left: node.position.dx,
-                      top: node.position.dy,
-                      child: GestureDetector(
-                        onTap: () => controller.selectNode(node.id),
-                        onPanUpdate: (details) {
-                          controller.dragNode(node.id, details.delta);
-                        },
-                        child: nodeWidget,
-                      ),
-                    );
-                  }),
-
-                  // Offstage stack for rendering nodes to images (for caching)
-                  Offstage(
-                    offstage: true,
-                    child: Stack(
-                      children: [
-                        ...controller.nodes.where((n) => n.needsRepaint).map(
-                          (node) {
-                            final nodeWidget =
-                                controller.getNodeWidget(node.id);
-                            if (nodeWidget == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return Positioned(
-                              left: node.position.dx,
-                              top: node.position.dy,
-                              child: RepaintBoundary(
-                                key: _nodeKeys[node.id],
-                                child: Material(
-                                  type: MaterialType.transparency,
-                                  child: nodeWidget,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+              // Offstage stack for rendering nodes to images (for caching)
+              Offstage(
+                offstage: true,
+                child: Stack(
+                  children: [
+                    ...controller.nodes.where((n) => n.needsRepaint).map(
+                      (node) {
+                        final nodeWidget = controller.getNodeWidget(node.id);
+                        if (nodeWidget == null) {
+                          return const SizedBox.shrink();
+                        }
+                        return Positioned(
+                          left: node.position.dx,
+                          top: node.position.dy,
+                          child: RepaintBoundary(
+                            key: _nodeKeys[node.id],
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: nodeWidget,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildControls(FlowCanvasController controller) {
     return Positioned(
       top: 16,
       left: 16,

@@ -363,20 +363,11 @@ class FlowCanvasController extends ChangeNotifier {
     }
   }
 
+// In FlowCanvasController class
   void dragNode(String nodeId, Offset delta) {
     final node = getNode(nodeId);
     if (node == null) return;
-
-    // Get current scale from the transformation controller
-    final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Adjust the drag delta by the current scale factor
-    final scaledDelta = delta / currentScale;
-
-    // Update the node's position
-    node.position += scaledDelta;
-
-    // Notify listeners to rebuild the canvas and show the moved node
+    node.position += delta;
     notifyListeners();
   }
 
