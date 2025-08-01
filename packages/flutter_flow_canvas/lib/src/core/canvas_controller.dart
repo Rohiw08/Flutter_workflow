@@ -24,9 +24,8 @@ class FlowCanvasController extends ChangeNotifier {
       TransformationController();
   Rect? selectionRect;
   DragMode dragMode = DragMode.none;
-  // ignore: unused_field
-  String? _draggedNodeId;
   Offset? _lastPanPosition;
+  Offset? _lastCanvasPosition;
   bool _isMultiSelect = false;
 
   // Configuration options
@@ -132,7 +131,7 @@ class FlowCanvasController extends ChangeNotifier {
     if (node != null) {
       node.cachedImage = image;
       node.needsRepaint = false;
-      _notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -364,13 +363,31 @@ class FlowCanvasController extends ChangeNotifier {
     }
   }
 
-  // === GESTURE HANDLING ===
+  void dragNode(String nodeId, Offset delta) {
+    final node = getNode(nodeId);
+    if (node == null) return;
+
+    // Get current scale from the transformation controller
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+
+    // Adjust the drag delta by the current scale factor
+    final scaledDelta = delta / currentScale;
+
+    // Update the node's position
+    node.position += scaledDelta;
+
+    // Notify listeners to rebuild the canvas and show the moved node
+    notifyListeners();
+  }
 
   /// Handle pan start
   void onPanStart(DragStartDetails details) {
     final canvasOffset =
         transformationController.toScene(details.localPosition);
     _lastPanPosition = details.localPosition;
+    // Store the initial canvas position for proper delta calculation
+    _lastCanvasPosition = canvasOffset;
+
     _isMultiSelect = enableMultiSelection &&
         (HardwareKeyboard.instance.isControlPressed ||
             HardwareKeyboard.instance.isShiftPressed);
@@ -386,7 +403,6 @@ class FlowCanvasController extends ChangeNotifier {
 
     if (hitNode != null) {
       dragMode = DragMode.node;
-      _draggedNodeId = hitNode.id;
 
       if (_isMultiSelect) {
         if (hitNode.isSelected) {
@@ -405,6 +421,9 @@ class FlowCanvasController extends ChangeNotifier {
         deselectAll(notify: false);
       }
       selectionRect = Rect.fromPoints(canvasOffset, canvasOffset);
+    } else {
+      // If we didn't hit anything, this should be canvas panning
+      dragMode = DragMode.canvas;
     }
     _notifyListeners();
   }
@@ -413,21 +432,33 @@ class FlowCanvasController extends ChangeNotifier {
   void onPanUpdate(DragUpdateDetails details) {
     if (_lastPanPosition == null) return;
 
-    final scale = transformationController.value.getMaxScaleOnAxis();
-    final scaledDelta = details.delta / scale;
-    final canvasOffset =
+    final currentCanvasOffset =
         transformationController.toScene(details.localPosition);
 
     if (dragMode == DragMode.node) {
-      // Move selected nodes
-      for (var node in _nodes) {
-        if (node.isSelected) {
-          node.position += scaledDelta;
+      // Calculate delta in canvas coordinates for consistent node movement
+      if (_lastCanvasPosition != null) {
+        final canvasDelta = currentCanvasOffset - _lastCanvasPosition!;
+
+        // Move selected nodes using canvas coordinate delta
+        for (var node in _nodes) {
+          if (node.isSelected) {
+            node.position += canvasDelta;
+          }
         }
+
+        _lastCanvasPosition = currentCanvasOffset;
       }
     } else if (dragMode == DragMode.selection && selectionRect != null) {
-      selectionRect = Rect.fromPoints(selectionRect!.topLeft, canvasOffset);
+      selectionRect =
+          Rect.fromPoints(selectionRect!.topLeft, currentCanvasOffset);
       _updateSelection();
+    } else if (dragMode == DragMode.canvas) {
+      // Handle canvas panning - use screen space delta directly
+      final screenDelta = details.localPosition - _lastPanPosition!;
+      final currentMatrix = transformationController.value.clone();
+      currentMatrix.translate(screenDelta.dx, screenDelta.dy);
+      transformationController.value = currentMatrix;
     }
 
     _lastPanPosition = details.localPosition;
@@ -437,8 +468,8 @@ class FlowCanvasController extends ChangeNotifier {
   /// Handle pan end
   void onPanEnd(DragEndDetails details) {
     dragMode = DragMode.none;
-    _draggedNodeId = null;
     _lastPanPosition = null;
+    _lastCanvasPosition = null; // Clear the canvas position reference
     selectionRect = null;
     _notifyListeners();
   }
@@ -525,6 +556,64 @@ class FlowCanvasController extends ChangeNotifier {
 
   /// Get current zoom level
   double get zoomLevel => transformationController.value.getMaxScaleOnAxis();
+
+  // === CANVAS NAVIGATION & MINIMAP HELPERS ===
+
+  /// ✨ NEW: Calculates the bounding box containing all nodes.
+  /// Required by the MiniMap to scale its content correctly.
+  Rect getNodesBounds() {
+    if (_nodes.isEmpty) return Rect.zero;
+    return _nodes
+        .map((n) => n.rect)
+        .reduce((value, element) => value.expandToInclude(element));
+  }
+
+  /// ✨ NEW: A direct way to pan the canvas.
+  /// Used by the MiniMap for viewport dragging.
+  void pan(Offset delta) {
+    final currentMatrix = transformationController.value.clone();
+    currentMatrix.translate(delta.dx, delta.dy);
+    transformationController.value = currentMatrix;
+  }
+
+  /// ✨ NEW: Centers the viewport on a specific point in the canvas coordinate space.
+  /// Used by the MiniMap for click-to-navigate.
+  void centerOnPosition(Offset position) {
+    final screenWidth =
+        (canvasWidth / 2); // Assuming a viewport size for centering
+    final screenHeight = (canvasHeight / 2);
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+
+    final newTransform = Matrix4.identity()
+      ..translate(-position.dx * currentScale + screenWidth,
+          -position.dy * currentScale + screenHeight)
+      ..scale(currentScale);
+
+    transformationController.value = newTransform;
+  }
+
+  /// ✨ NEW: Zooms the canvas at a specific focal point.
+  /// Used by the MiniMap for scroll-to-zoom.
+  void zoomAtPoint(double zoomDelta, Offset focalPoint) {
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+    final newScale = (currentScale + zoomDelta).clamp(0.1, 2.0);
+    if (newScale == currentScale) return;
+
+    final scaleChange = newScale / currentScale;
+
+    // The position of the focal point in the scene
+    // ignore: unused_local_variable
+    final sceneFocalPoint = transformationController.toScene(focalPoint);
+
+    // Create the new matrix
+    final newMatrix = Matrix4.identity()
+      ..translate(focalPoint.dx, focalPoint.dy)
+      ..scale(scaleChange)
+      ..translate(-focalPoint.dx, -focalPoint.dy);
+
+    transformationController.value =
+        transformationController.value.multiplied(newMatrix);
+  }
 
   // === UTILITY METHODS ===
 

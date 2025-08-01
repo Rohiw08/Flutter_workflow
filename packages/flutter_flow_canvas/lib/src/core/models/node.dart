@@ -26,6 +26,16 @@ class FlowNode {
     this.isSelected = false,
   });
 
+  /// This is used by the MiniMap to get default styling values.
+  factory FlowNode.empty() {
+    return FlowNode(
+      id: '_empty_',
+      position: Offset.zero,
+      size: Size.zero,
+      data: NodeData(),
+    );
+  }
+
   Rect get rect =>
       Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
 

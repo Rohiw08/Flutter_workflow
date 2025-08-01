@@ -1,311 +1,507 @@
+import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vector_math/vector_math_64.dart' hide Colors;
 import '../../core/canvas_controller.dart';
+import '../../core/models/node.dart';
 import '../../core/providers.dart';
 
-/// A miniature overview map of the canvas showing nodes and viewport
-class MiniMap extends ConsumerWidget {
-  /// Width of the minimap
+// --- Callbacks for Custom Styling and Interaction ---
+
+/// A function that returns a color for a given node.
+typedef MiniMapNodeColorFunc = Color? Function(FlowNode node);
+
+/// A function that returns a class name for a given node (for potential future use).
+typedef MiniMapNodeClassFunc = String Function(FlowNode node);
+
+/// A custom builder function to render a node in the minimap.
+/// It should return a Path to be drawn.
+typedef MiniMapNodeBuilder = Path Function(FlowNode node);
+
+/// A callback for when a node in the minimap is clicked.
+typedef MiniMapNodeOnClick = void Function(FlowNode node);
+
+/// A miniature overview map of the canvas, with extensive customization.
+class MiniMap extends ConsumerStatefulWidget {
+  // --- Sizing and Positioning ---
   final double width;
-
-  /// Height of the minimap
   final double height;
-
-  /// Color for regular nodes
-  final Color nodeColor;
-
-  /// Color for selected nodes
-  final Color selectedNodeColor;
-
-  /// Color for viewport indicator
-  final Color viewportColor;
-
-  /// Background color of minimap
-  final Color backgroundColor;
-
-  /// Whether the minimap is interactive (click to navigate)
-  final bool interactive;
-
-  /// Corner radius for minimap
-  final double borderRadius;
-
-  /// Position of minimap on screen
   final Alignment alignment;
-
-  /// Margin from screen edges
   final EdgeInsets margin;
+
+  // --- Node Styling ---
+  final MiniMapNodeColorFunc? nodeColor;
+  final MiniMapNodeColorFunc? nodeStrokeColor;
+  final double nodeBorderRadius;
+  final double nodeStrokeWidth;
+  final MiniMapNodeBuilder? nodeBuilder;
+
+  // --- Mask (Viewport) Styling ---
+  final Color maskColor;
+  final Color maskStrokeColor;
+  final double maskStrokeWidth;
+
+  // --- Interactivity ---
+  final bool pannable;
+  final bool zoomable;
+  final bool inversePan;
+  final double zoomStep;
+  final MiniMapNodeOnClick? onNodeClick;
+
+  // --- Accessibility & Misc ---
+  final String ariaLabel;
+  final Color backgroundColor;
 
   const MiniMap({
     super.key,
     this.width = 200,
     this.height = 150,
-    this.nodeColor = Colors.blueGrey,
-    this.selectedNodeColor = Colors.blue,
-    this.viewportColor = Colors.blue,
-    this.backgroundColor = Colors.white,
-    this.interactive = true,
-    this.borderRadius = 8.0,
     this.alignment = Alignment.bottomRight,
     this.margin = const EdgeInsets.all(20),
+    this.nodeColor,
+    this.nodeStrokeColor,
+    this.nodeBorderRadius = 2.0,
+    this.nodeStrokeWidth = 1.5,
+    this.nodeBuilder,
+    this.maskColor = const Color(0x99F0F2F5), // Semi-transparent light grey
+    this.maskStrokeColor = Colors.grey,
+    this.maskStrokeWidth = 1.0,
+    this.pannable = true,
+    this.zoomable = true,
+    this.inversePan = false,
+    this.zoomStep = 0.1,
+    this.onNodeClick,
+    this.ariaLabel = 'Mini map',
+    this.backgroundColor = Colors.white,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MiniMap> createState() => _MiniMapState();
+}
+
+class _MiniMapState extends ConsumerState<MiniMap> {
+  Offset? _dragStart;
+
+  @override
+  Widget build(BuildContext context) {
     final controller = ref.watch(flowControllerProvider);
 
     return Align(
-      alignment: alignment,
-      child: Container(
-        margin: margin,
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: backgroundColor.withAlpha(240),
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(color: Colors.grey.shade300, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(25),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius - 1),
-          child: Stack(
-            children: [
-              // Minimap content
-              ListenableBuilder(
-                listenable: controller,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: _MiniMapPainter(
-                      controller: controller,
-                      canvasSize:
-                          Size(controller.canvasWidth, controller.canvasHeight),
-                      widgetSize: Size(width, height),
-                      nodeColor: nodeColor,
-                      selectedNodeColor: selectedNodeColor,
-                      viewportColor: viewportColor,
-                    ),
-                    size: Size(width, height),
-                  );
-                },
+      alignment: widget.alignment,
+      child: Semantics(
+        label: widget.ariaLabel,
+        child: Container(
+          margin: widget.margin,
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: widget.backgroundColor.withAlpha(240),
+            borderRadius: BorderRadius.circular(widget.nodeBorderRadius + 1),
+            border: Border.all(color: Colors.grey.shade300, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-
-              // Title overlay
-              Positioned(
-                top: 6,
-                left: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(180),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    'Mini Map',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Stats overlay
-              Positioned(
-                bottom: 6,
-                left: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(180),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ListenableBuilder(
-                    listenable: controller,
-                    builder: (context, _) {
-                      return Text(
-                        '${controller.nodes.length} nodes',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              // Interactive overlay
-              if (interactive)
-                Positioned.fill(
-                  child: GestureDetector(
-                    onTapDown: (details) => _navigateToPosition(
-                      controller,
-                      details.localPosition,
-                      Size(width, height),
-                    ),
-                  ),
-                ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(widget.nodeBorderRadius),
+            child: Listener(
+              onPointerSignal: widget.zoomable ? _onPointerSignal : null,
+              child: GestureDetector(
+                onTapUp: (details) =>
+                    _onTapUp(controller, details.localPosition),
+                onPanStart: widget.pannable ? _onPanStart : null,
+                onPanUpdate: widget.pannable ? _onPanUpdate : null,
+                child: CustomPaint(
+                  painter: _MiniMapPainter(
+                    controller: controller,
+                    nodeColor: widget.nodeColor,
+                    nodeStrokeColor: widget.nodeStrokeColor,
+                    nodeBorderRadius: widget.nodeBorderRadius,
+                    nodeStrokeWidth: widget.nodeStrokeWidth,
+                    nodeBuilder: widget.nodeBuilder,
+                    maskColor: widget.maskColor,
+                    maskStrokeColor: widget.maskStrokeColor,
+                    maskStrokeWidth: widget.maskStrokeWidth,
+                    minimapSize: Size(widget.width, widget.height),
+                  ),
+                  size: Size(widget.width, widget.height),
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Navigate canvas to clicked position on minimap
-  void _navigateToPosition(
-      FlowCanvasController controller, Offset localPosition, Size miniMapSize) {
-    final canvasSize = Size(controller.canvasWidth, controller.canvasHeight);
+  MiniMapTransform _calculateTransform(FlowCanvasController controller) {
+    if (controller.nodes.isEmpty) {
+      return MiniMapTransform(
+        scale: 1.0,
+        offsetX: 0.0,
+        offsetY: 0.0,
+        contentBounds: Rect.zero,
+      );
+    }
 
-    // Convert minimap position to canvas coordinates
-    final scaleX = canvasSize.width / miniMapSize.width;
-    final scaleY = canvasSize.height / miniMapSize.height;
+    final contentBounds = controller.getNodesBounds();
+    final minimapSize = Size(widget.width, widget.height);
 
-    final canvasPosition = Offset(
-      localPosition.dx * scaleX,
-      localPosition.dy * scaleY,
+    if (contentBounds.width <= 0 || contentBounds.height <= 0) {
+      return MiniMapTransform(
+        scale: 1.0,
+        offsetX: 0.0,
+        offsetY: 0.0,
+        contentBounds: contentBounds,
+      );
+    }
+
+    // Calculate scale to fit content in minimap with some padding
+    const padding = 10.0;
+    final availableWidth = minimapSize.width - 2 * padding;
+    final availableHeight = minimapSize.height - 2 * padding;
+
+    final scaleX = availableWidth / contentBounds.width;
+    final scaleY = availableHeight / contentBounds.height;
+    final scale = min(scaleX, scaleY);
+
+    // Calculate offset to center content in minimap
+    final scaledContentWidth = contentBounds.width * scale;
+    final scaledContentHeight = contentBounds.height * scale;
+
+    final offsetX = (minimapSize.width - scaledContentWidth) / 2 -
+        contentBounds.left * scale;
+    final offsetY = (minimapSize.height - scaledContentHeight) / 2 -
+        contentBounds.top * scale;
+
+    return MiniMapTransform(
+      scale: scale,
+      offsetX: offsetX,
+      offsetY: offsetY,
+      contentBounds: contentBounds,
     );
+  }
 
-    // Center the view on this position
-    final currentScale =
-        controller.transformationController.value.getMaxScaleOnAxis();
-    final newTransform = Matrix4.identity()
-      ..translate(-canvasPosition.dx * currentScale + miniMapSize.width / 2,
-          -canvasPosition.dy * currentScale + miniMapSize.height / 2)
-      ..scale(currentScale);
+  void _onTapUp(FlowCanvasController controller, Offset localPosition) {
+    final transform = _calculateTransform(controller);
 
-    controller.transformationController.value = newTransform;
+    // Hit-test for nodes first (in reverse order for proper layering)
+    for (final node in controller.nodes.reversed) {
+      final nodeRect = Rect.fromLTWH(
+        node.position.dx * transform.scale + transform.offsetX,
+        node.position.dy * transform.scale + transform.offsetY,
+        node.size.width * transform.scale,
+        node.size.height * transform.scale,
+      );
+
+      if (nodeRect.contains(localPosition)) {
+        widget.onNodeClick?.call(node);
+        return;
+      }
+    }
+
+    // If no node was clicked, navigate the canvas to the clicked position
+    if (transform.scale > 0) {
+      final canvasX = (localPosition.dx - transform.offsetX) / transform.scale;
+      final canvasY = (localPosition.dy - transform.offsetY) / transform.scale;
+
+      // Get current viewport size to center properly
+      final currentTransform = controller.transformationController.value;
+      final currentScale = currentTransform.getMaxScaleOnAxis();
+
+      // Estimate viewport size (this should ideally come from the canvas widget)
+      const viewportWidth = 800.0; // You might want to make this configurable
+      const viewportHeight = 600.0;
+
+      final viewportCenterX = viewportWidth / 2 / currentScale;
+      final viewportCenterY = viewportHeight / 2 / currentScale;
+
+      final targetX = canvasX - viewportCenterX;
+      final targetY = canvasY - viewportCenterY;
+
+      final newTransform = Matrix4.identity()
+        ..scale(currentScale)
+        ..translate(-targetX * currentScale, -targetY * currentScale);
+
+      controller.transformationController.value = newTransform;
+    }
+  }
+
+  void _onPanStart(DragStartDetails details) {
+    _dragStart = details.localPosition;
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (_dragStart == null) return;
+
+    final controller = ref.read(flowControllerProvider);
+    final transform = _calculateTransform(controller);
+
+    if (transform.scale <= 0) return;
+
+    final delta = widget.inversePan ? details.delta : -details.delta;
+    final canvasDelta =
+        Offset(delta.dx / transform.scale, delta.dy / transform.scale);
+
+    // Apply the pan to the main canvas
+    final currentMatrix = controller.transformationController.value.clone();
+    currentMatrix.translate(canvasDelta.dx, canvasDelta.dy);
+    controller.transformationController.value = currentMatrix;
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final controller = ref.read(flowControllerProvider);
+      final transform = _calculateTransform(controller);
+
+      if (transform.scale <= 0) return;
+
+      // Convert minimap position to canvas position
+      final canvasPosition = Offset(
+        (event.localPosition.dx - transform.offsetX) / transform.scale,
+        (event.localPosition.dy - transform.offsetY) / transform.scale,
+      );
+
+      final zoomDelta = -event.scrollDelta.dy * 0.001 * widget.zoomStep;
+      final currentScale =
+          controller.transformationController.value.getMaxScaleOnAxis();
+      final newScale = (currentScale + zoomDelta).clamp(0.1, 2.0);
+
+      if (newScale != currentScale) {
+        final scaleChange = newScale / currentScale;
+
+        // Calculate the position that should remain fixed during zoom
+        final currentTransform = controller.transformationController.value;
+
+        // Apply zoom with the canvas position as the focal point
+        final newTransform = Matrix4.identity()
+          ..translate(canvasPosition.dx * currentScale,
+              canvasPosition.dy * currentScale)
+          ..scale(scaleChange)
+          ..translate(-canvasPosition.dx * currentScale,
+              -canvasPosition.dy * currentScale)
+          ..multiply(currentTransform);
+
+        controller.transformationController.value = newTransform;
+      }
+    }
   }
 }
 
-/// Custom painter for minimap content
+class MiniMapTransform {
+  final double scale;
+  final double offsetX;
+  final double offsetY;
+  final Rect contentBounds;
+
+  MiniMapTransform({
+    required this.scale,
+    required this.offsetX,
+    required this.offsetY,
+    required this.contentBounds,
+  });
+}
+
 class _MiniMapPainter extends CustomPainter {
   final FlowCanvasController controller;
-  final Size canvasSize;
-  final Size widgetSize;
-  final Color nodeColor;
-  final Color selectedNodeColor;
-  final Color viewportColor;
+  final MiniMapNodeColorFunc? nodeColor;
+  final MiniMapNodeColorFunc? nodeStrokeColor;
+  final double nodeBorderRadius;
+  final double nodeStrokeWidth;
+  final MiniMapNodeBuilder? nodeBuilder;
+  final Color maskColor;
+  final Color maskStrokeColor;
+  final double maskStrokeWidth;
+  final Size minimapSize;
 
   _MiniMapPainter({
     required this.controller,
-    required this.canvasSize,
-    required this.widgetSize,
-    required this.nodeColor,
-    required this.selectedNodeColor,
-    required this.viewportColor,
-  });
+    this.nodeColor,
+    this.nodeStrokeColor,
+    required this.nodeBorderRadius,
+    required this.nodeStrokeWidth,
+    this.nodeBuilder,
+    required this.maskColor,
+    required this.maskStrokeColor,
+    required this.maskStrokeWidth,
+    required this.minimapSize,
+  }) : super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scaleX = widgetSize.width / canvasSize.width;
-    final scaleY = widgetSize.height / canvasSize.height;
-    final scale = scaleX < scaleY ? scaleX : scaleY;
+    if (controller.nodes.isEmpty) return;
 
-    // Draw edges first (behind nodes)
-    _drawEdges(canvas, scale);
+    final transform = _calculateTransform();
+    if (transform.scale <= 0) return;
 
     // Draw nodes
-    _drawNodes(canvas, scale);
+    _drawNodes(canvas, transform);
 
-    // Draw viewport indicator
-    _drawViewport(canvas, scale);
+    // Draw viewport mask
+    _drawViewportMask(canvas, size, transform);
   }
 
-  void _drawEdges(Canvas canvas, double scale) {
-    final edgePaint = Paint()
-      ..color = Colors.grey.shade400
-      ..strokeWidth = 1.0
-      ..style = PaintingStyle.stroke;
+  MiniMapTransform _calculateTransform() {
+    final contentBounds = controller.getNodesBounds();
 
-    for (final edge in controller.edges) {
-      final sourceNode = controller.getNode(edge.sourceNodeId);
-      final targetNode = controller.getNode(edge.targetNodeId);
+    if (contentBounds.width <= 0 || contentBounds.height <= 0) {
+      return MiniMapTransform(
+        scale: 1.0,
+        offsetX: 0.0,
+        offsetY: 0.0,
+        contentBounds: contentBounds,
+      );
+    }
 
-      if (sourceNode != null && targetNode != null) {
-        final start = Offset(
-          (sourceNode.position.dx + sourceNode.size.width / 2) * scale,
-          (sourceNode.position.dy + sourceNode.size.height / 2) * scale,
+    // Calculate scale to fit content in minimap with padding
+    const padding = 10.0;
+    final availableWidth = minimapSize.width - 2 * padding;
+    final availableHeight = minimapSize.height - 2 * padding;
+
+    final scaleX = availableWidth / contentBounds.width;
+    final scaleY = availableHeight / contentBounds.height;
+    final scale = min(scaleX, scaleY);
+
+    // Calculate offset to center content
+    final scaledContentWidth = contentBounds.width * scale;
+    final scaledContentHeight = contentBounds.height * scale;
+
+    final offsetX = (minimapSize.width - scaledContentWidth) / 2 -
+        contentBounds.left * scale;
+    final offsetY = (minimapSize.height - scaledContentHeight) / 2 -
+        contentBounds.top * scale;
+
+    return MiniMapTransform(
+      scale: scale,
+      offsetX: offsetX,
+      offsetY: offsetY,
+      contentBounds: contentBounds,
+    );
+  }
+
+  void _drawNodes(Canvas canvas, MiniMapTransform transform) {
+    final defaultNodeColor =
+        nodeColor?.call(FlowNode.empty()) ?? Colors.blue.shade400;
+    final defaultStrokeColor =
+        nodeStrokeColor?.call(FlowNode.empty()) ?? Colors.blue.shade600;
+
+    for (final node in controller.nodes) {
+      final fillColor = nodeColor?.call(node) ?? defaultNodeColor;
+      final strokeColor = nodeStrokeColor?.call(node) ?? defaultStrokeColor;
+
+      final fillPaint = Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill;
+
+      final strokePaint = Paint()
+        ..color = strokeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = nodeStrokeWidth;
+
+      // Calculate node position and size in minimap coordinates
+      final nodeX = node.position.dx * transform.scale + transform.offsetX;
+      final nodeY = node.position.dy * transform.scale + transform.offsetY;
+      final nodeWidth = node.size.width * transform.scale;
+      final nodeHeight = node.size.height * transform.scale;
+
+      if (nodeBuilder != null) {
+        // Use custom node builder
+        canvas.save();
+        canvas.translate(nodeX, nodeY);
+        canvas.scale(transform.scale);
+        final path = nodeBuilder!(node);
+        canvas.drawPath(path, fillPaint);
+        if (nodeStrokeWidth > 0) {
+          canvas.drawPath(path, strokePaint);
+        }
+        canvas.restore();
+      } else {
+        // Default rectangular node
+        final nodeRect = Rect.fromLTWH(nodeX, nodeY, nodeWidth, nodeHeight);
+        final rrect = RRect.fromRectAndRadius(
+          nodeRect,
+          Radius.circular(nodeBorderRadius),
         );
-        final end = Offset(
-          (targetNode.position.dx + targetNode.size.width / 2) * scale,
-          (targetNode.position.dy + targetNode.size.height / 2) * scale,
-        );
 
-        canvas.drawLine(start, end, edgePaint);
+        canvas.drawRRect(rrect, fillPaint);
+        if (nodeStrokeWidth > 0) {
+          canvas.drawRRect(rrect, strokePaint);
+        }
       }
     }
   }
 
-  void _drawNodes(Canvas canvas, double scale) {
-    final normalNodePaint = Paint()..color = nodeColor;
-    final selectedNodePaint = Paint()..color = selectedNodeColor;
+  void _drawViewportMask(Canvas canvas, Size size, MiniMapTransform transform) {
+    // Get the current viewport bounds in canvas coordinates
+    final canvasTransform = controller.transformationController.value;
+    final canvasScale = canvasTransform.getMaxScaleOnAxis();
 
-    for (final node in controller.nodes) {
-      final rect = Rect.fromLTWH(
-        node.position.dx * scale,
-        node.position.dy * scale,
-        node.size.width * scale,
-        node.size.height * scale,
-      );
+    if (canvasScale <= 0) return;
 
-      final paint = node.isSelected ? selectedNodePaint : normalNodePaint;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, Radius.circular(2 * scale)),
-        paint,
+    // Estimate viewport size (this should ideally come from the actual canvas widget)
+    const viewportWidth = 800.0; // You might want to make this configurable
+    const viewportHeight = 600.0;
+
+    // Calculate viewport bounds in canvas coordinates
+    final translation = canvasTransform.getTranslation();
+    final viewportLeft = -translation.x / canvasScale;
+    final viewportTop = -translation.y / canvasScale;
+    final viewportRight = viewportLeft + viewportWidth / canvasScale;
+    final viewportBottom = viewportTop + viewportHeight / canvasScale;
+
+    // Transform viewport bounds to minimap coordinates
+    final minimapViewportLeft =
+        viewportLeft * transform.scale + transform.offsetX;
+    final minimapViewportTop =
+        viewportTop * transform.scale + transform.offsetY;
+    final minimapViewportWidth =
+        (viewportRight - viewportLeft) * transform.scale;
+    final minimapViewportHeight =
+        (viewportBottom - viewportTop) * transform.scale;
+
+    final viewportRect = Rect.fromLTWH(
+      minimapViewportLeft,
+      minimapViewportTop,
+      minimapViewportWidth,
+      minimapViewportHeight,
+    );
+
+    // Clamp viewport rect to minimap bounds
+    final clampedViewportRect = Rect.fromLTRB(
+      viewportRect.left.clamp(0.0, size.width),
+      viewportRect.top.clamp(0.0, size.height),
+      viewportRect.right.clamp(0.0, size.width),
+      viewportRect.bottom.clamp(0.0, size.height),
+    );
+
+    // Draw mask (everything except the viewport)
+    final maskPath = Path.combine(
+      PathOperation.difference,
+      Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
+      Path()..addRect(clampedViewportRect),
+    );
+
+    canvas.drawPath(maskPath, Paint()..color = maskColor);
+
+    // Draw viewport border
+    if (maskStrokeWidth > 0) {
+      canvas.drawRect(
+        clampedViewportRect,
+        Paint()
+          ..color = maskStrokeColor
+          ..strokeWidth = maskStrokeWidth
+          ..style = PaintingStyle.stroke,
       );
     }
   }
 
-  void _drawViewport(Canvas canvas, double scale) {
-    final viewportPaint = Paint()
-      ..color = viewportColor.withAlpha(50)
-      ..style = PaintingStyle.fill;
-
-    final viewportBorderPaint = Paint()
-      ..color = viewportColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final matrix = controller.transformationController.value;
-    final viewportRect =
-        controller.transformationController.toScene(Offset.zero);
-    final currentScale = matrix.getMaxScaleOnAxis();
-
-    final viewportSize = Size(
-      widgetSize.width / currentScale,
-      widgetSize.height / currentScale,
-    );
-
-    final miniMapViewPort = Rect.fromLTWH(
-      -viewportRect.dx * scale,
-      -viewportRect.dy * scale,
-      viewportSize.width * scale,
-      viewportSize.height * scale,
-    );
-
-    // Clamp viewport to minimap bounds
-    final clampedViewport = Rect.fromLTWH(
-      miniMapViewPort.left.clamp(0.0, widgetSize.width),
-      miniMapViewPort.top.clamp(0.0, widgetSize.height),
-      (miniMapViewPort.width)
-          .clamp(0.0, widgetSize.width - miniMapViewPort.left),
-      (miniMapViewPort.height)
-          .clamp(0.0, widgetSize.height - miniMapViewPort.top),
-    );
-
-    canvas.drawRect(clampedViewport, viewportPaint);
-    canvas.drawRect(clampedViewport, viewportBorderPaint);
-  }
-
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(_MiniMapPainter oldDelegate) {
+    return true; // For simplicity, always repaint. Can be optimized later.
+  }
 }

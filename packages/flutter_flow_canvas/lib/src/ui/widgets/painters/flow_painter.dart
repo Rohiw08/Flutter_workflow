@@ -6,7 +6,7 @@ import '../../../utils/edge_path_creator.dart';
 class FlowPainter extends CustomPainter {
   final FlowCanvasController controller;
 
-  FlowPainter({required this.controller});
+  FlowPainter({required this.controller}) : super(repaint: controller);
 
   Offset? _getHandlePosition(String nodeId, String handleId) {
     final globalPos = controller.getHandleGlobalPosition(nodeId, handleId);
@@ -46,12 +46,25 @@ class FlowPainter extends CustomPainter {
 
   void _drawNodes(Canvas canvas, Rect canvasRect) {
     final nodePaint = Paint();
-    for (final node in controller.nodes) {
-      if (node.cachedImage != null) {
-        // Culling check
-        if (!canvasRect.overlaps(node.rect.inflate(100))) continue;
+    // Define a paint for the selection border
+    final borderPaint = Paint()
+      ..color = Colors.blue
+      ..strokeWidth = 1.0 // Adjust thickness as needed
+      ..style = PaintingStyle.stroke;
 
+    for (final node in controller.nodes) {
+      // Culling check
+      if (!canvasRect.overlaps(node.rect.inflate(100))) continue;
+
+      // Draw the cached node image
+      if (node.cachedImage != null) {
         canvas.drawImage(node.cachedImage!, node.position, nodePaint);
+      }
+
+      // If the node is selected, draw a border on top
+      if (node.isSelected) {
+        // Use node.rect and inflate it slightly so the border is on the outside
+        canvas.drawRect(node.rect.inflate(1.0), borderPaint);
       }
     }
   }
@@ -204,5 +217,7 @@ class FlowPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant FlowPainter oldDelegate) {
+    return oldDelegate.controller != controller;
+  }
 }
