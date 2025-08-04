@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/providers.dart'; // Assuming this provides your FlowCanvasController
-
-/// Defines the automatic alignment position of a handle on a node.
-enum HandlePosition { top, right, bottom, left }
-
-/// Type of handle for connection validation.
-enum HandleType { source, target }
+import '../../../flutter_flow_canvas.dart';
+import '../../core/enums.dart';
 
 /// A callback function to validate a potential connection.
 typedef IsValidConnectionCallback = bool Function(
@@ -16,14 +11,7 @@ typedef IsValidConnectionCallback = bool Function(
   String targetHandleId,
 );
 
-/// A highly customizable connection handle that can be placed on nodes.
-///
-/// This widget supports two positioning modes:
-/// 1.  **Automatic Positioning:** If a `position` is provided, the handle will
-///     automatically align itself to that edge of its parent container.
-/// 2.  **Manual Positioning:** If `position` is null, the handle renders as a
-///     simple widget, and you are responsible for positioning it using widgets
-///     like `Stack` and `Positioned`.
+/// A React Flow style connection handle that can be placed on nodes.
 class Handle extends ConsumerStatefulWidget {
   /// The ID of the node this handle belongs to.
   final String nodeId;
@@ -41,15 +29,14 @@ class Handle extends ConsumerStatefulWidget {
   final double size;
 
   /// A custom widget to display inside the handle. If null, a default
-  /// representation is used.
+  /// React Flow style representation is used.
   final Widget? child;
 
-  /// The base decoration for the handle. This is used for the default state.
-  final BoxDecoration? decoration;
-
-  /// The decoration to apply when the handle is hovered, being connected,
-  /// or targeted by a connection. If null, a default hover effect is used.
-  final BoxDecoration? hoverDecoration;
+  /// Custom colors for the handle states
+  final Color? idleColor;
+  final Color? hoverColor;
+  final Color? connectingColor;
+  final Color? validTargetColor;
 
   /// A master switch to enable or disable all connections for this handle.
   final bool isConnectable;
@@ -80,10 +67,12 @@ class Handle extends ConsumerStatefulWidget {
     required this.id,
     this.position,
     this.type = HandleType.source,
-    this.size = 15.0,
+    this.size = 8.0, // Smaller default size like React Flow
     this.child,
-    this.decoration,
-    this.hoverDecoration,
+    this.idleColor,
+    this.hoverColor,
+    this.connectingColor,
+    this.validTargetColor,
     this.isConnectable = true,
     this.isConnectableStart = true,
     this.isConnectableEnd = true,
@@ -93,37 +82,52 @@ class Handle extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<Handle> createState() => _HandleState();
+  ConsumerState<Handle> createState() => HandleState();
 }
 
-class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
-  final GlobalKey _key = GlobalKey();
+class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
+  final GlobalKey<HandleState> _key = GlobalKey<HandleState>();
   bool _isHovered = false;
   bool _isConnecting = false;
-  late AnimationController _animationController;
+  late AnimationController _scaleController;
+  late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
+  late Animation<double> _pulseAnimation;
+
+  FlowCanvasController get controller => ref.read(flowControllerProvider);
 
   @override
   void initState() {
     super.initState();
 
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 150),
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(
       CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-        reverseCurve: Curves.easeIn,
+        parent: _scaleController,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
       ),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref
-            .read(flowControllerProvider)
+        controller.connectionManager
             .registerHandle(widget.nodeId, widget.id, _key);
       }
     });
@@ -131,8 +135,9 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _animationController.dispose();
-    ref.read(flowControllerProvider).unregisterHandle(widget.nodeId, widget.id);
+    _scaleController.dispose();
+    _pulseController.dispose();
+    controller.connectionManager.unregisterHandle(widget.nodeId, widget.id);
     super.dispose();
   }
 
@@ -143,32 +148,52 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
       return;
     }
 
-    final controller = ref.read(flowControllerProvider);
-    controller.startConnection(
+    controller.connectionManager.startConnection(
       widget.nodeId,
       widget.id,
       details.globalPosition,
     );
     setState(() => _isConnecting = true);
     if (widget.enableAnimations) {
-      _animationController.forward();
+      _scaleController.forward();
+      _pulseController.repeat();
     }
   }
 
   void _onPanEnd(DragEndDetails details) {
     if (!_isConnecting) return;
+
+    controller.connectionManager.endConnection();
+
     setState(() => _isConnecting = false);
-    if (widget.enableAnimations && !_isHovered) {
-      _animationController.reverse();
+    if (widget.enableAnimations) {
+      _pulseController.stop();
+      _pulseController.reset();
+      if (!_isHovered) {
+        _scaleController.reverse();
+      }
     }
   }
 
-  BoxDecoration _buildDefaultDecoration(Color color, Color borderColor) {
-    return BoxDecoration(
-      color: color,
-      shape: BoxShape.circle,
-      border: Border.all(color: borderColor, width: 2.0),
-    );
+  Color _getHandleColor() {
+    final currentConnection = ref.watch(
+        flowControllerProvider.select((c) => c.connectionManager.connection));
+    final isTargeted =
+        currentConnection?.hoveredTargetKey == '${widget.nodeId}/${widget.id}';
+    final canBeTarget = widget.isConnectable &&
+        widget.isConnectableEnd &&
+        widget.type == HandleType.target;
+
+    if (isTargeted && canBeTarget) {
+      return widget.validTargetColor ?? const Color(0xFF10B981); // Green
+    }
+    if (_isConnecting) {
+      return widget.connectingColor ?? const Color(0xFF3B82F6); // Blue
+    }
+    if (_isHovered) {
+      return widget.hoverColor ?? const Color(0xFF6B7280); // Gray-500
+    }
+    return widget.idleColor ?? const Color(0xFF9CA3AF); // Gray-400
   }
 
   Alignment _getAlignment() {
@@ -202,40 +227,97 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = ref.watch(flowControllerProvider);
-    final isTargeted = controller.connection?.hoveredTargetKey ==
-        '${widget.nodeId}/${widget.id}';
+  Widget _buildReactFlowHandle() {
+    final handleColor = _getHandleColor();
+    final currentConnection = ref.watch(
+        flowControllerProvider.select((c) => c.connectionManager.connection));
+    final isTargeted =
+        currentConnection?.hoveredTargetKey == '${widget.nodeId}/${widget.id}';
     final canBeTarget = widget.isConnectable &&
         widget.isConnectableEnd &&
         widget.type == HandleType.target;
-    final showAsActive =
-        _isHovered || _isConnecting || (isTargeted && canBeTarget);
+    final showPulse = _isConnecting || (isTargeted && canBeTarget);
 
-    BoxDecoration? currentDecoration;
-    if (showAsActive) {
-      currentDecoration = widget.hoverDecoration ??
-          _buildDefaultDecoration(Colors.blue, Colors.blue.shade700);
-    } else {
-      currentDecoration = widget.decoration ??
-          _buildDefaultDecoration(Colors.white, Colors.grey.shade400);
-    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        if (showPulse && widget.enableAnimations)
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Container(
+                width: widget.size * (2 + _pulseAnimation.value * 1.5),
+                height: widget.size * (2 + _pulseAnimation.value * 1.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: handleColor
+                        .withOpacity(0.3 * (1 - _pulseAnimation.value)),
+                    width: 1.0,
+                  ),
+                ),
+              );
+            },
+          ),
+        if (_isHovered || _isConnecting || (isTargeted && canBeTarget))
+          Container(
+            width: widget.size * 1.8,
+            height: widget.size * 1.8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: handleColor.withAlpha(50),
+            ),
+          ),
+        Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: handleColor,
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(25),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+        ),
+        if (widget.type == HandleType.source || _isConnecting)
+          Container(
+            width: widget.size * 0.4,
+            height: widget.size * 0.4,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+            ),
+          ),
+      ],
+    );
+  }
 
+  @override
+  Widget build(BuildContext context) {
     final handleWidget = MouseRegion(
       onEnter: (_) {
-        if (!widget.enableAnimations) return;
         setState(() => _isHovered = true);
-        _animationController.forward();
-      },
-      onExit: (_) {
-        if (!widget.enableAnimations) return;
-        setState(() => _isHovered = false);
-        if (!_isConnecting) {
-          _animationController.reverse();
+        if (widget.enableAnimations) {
+          _scaleController.forward();
         }
       },
-      cursor: SystemMouseCursors.grab,
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        if (widget.enableAnimations && !_isConnecting) {
+          _scaleController.reverse();
+        }
+      },
+      cursor: widget.isConnectable
+          ? SystemMouseCursors.grab
+          : SystemMouseCursors.basic,
       child: GestureDetector(
         onPanStart: _onPanStart,
         onPanEnd: _onPanEnd,
@@ -246,9 +328,11 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
               key: _key,
               scale: widget.enableAnimations ? _scaleAnimation.value : 1.0,
               child: SizedBox(
-                width: widget.size,
-                height: widget.size,
-                child: widget.child ?? Container(decoration: currentDecoration),
+                width: widget.size * 2.5, // Larger hit area
+                height: widget.size * 2.5,
+                child: Center(
+                  child: widget.child ?? _buildReactFlowHandle(),
+                ),
               ),
             );
           },
@@ -265,8 +349,6 @@ class _HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
         ),
       );
     }
-
-    // If no position is specified, return the widget directly for manual positioning.
     return handleWidget;
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../core/canvas_controller.dart';
-import '../../../core/models/edge.dart';
+import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+
 import '../../../utils/edge_path_creator.dart';
 
 class FlowPainter extends CustomPainter {
@@ -9,7 +9,8 @@ class FlowPainter extends CustomPainter {
   FlowPainter({required this.controller}) : super(repaint: controller);
 
   Offset? _getHandlePosition(String nodeId, String handleId) {
-    final globalPos = controller.getHandleGlobalPosition(nodeId, handleId);
+    final globalPos =
+        controller.connectionManager.getHandleGlobalPosition(nodeId, handleId);
     if (globalPos != null) {
       return controller.transformationController.toScene(globalPos);
     }
@@ -23,19 +24,11 @@ class FlowPainter extends CustomPainter {
     final canvasRect =
         MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
-    // ================================= //
-    //           CHANGE START            //
-    // ================================= //
-
     // Draw edges first
     _drawEdges(canvas, canvasRect);
 
     // Then draw nodes on top
     _drawNodes(canvas, canvasRect);
-
-    // ================================= //
-    //            CHANGE END             //
-    // ================================= //
 
     // Draw in-progress connection
     _drawConnection(canvas);
@@ -91,11 +84,10 @@ class FlowPainter extends CustomPainter {
 
         final path = EdgePathCreator.createPath(edge.type, start, end);
 
-        // Determine if edge is selected (connected to selected node)
-        final sourceSelected =
-            controller.selectedNodes.contains(edge.sourceNodeId);
-        final targetSelected =
-            controller.selectedNodes.contains(edge.targetNodeId);
+        final sourceSelected = controller.selectionManager.selectedNodes
+            .contains(edge.sourceNodeId);
+        final targetSelected = controller.selectionManager.selectedNodes
+            .contains(edge.targetNodeId);
         final isSelected = sourceSelected || targetSelected;
 
         final paint =
@@ -126,8 +118,8 @@ class FlowPainter extends CustomPainter {
   }
 
   void _drawConnection(Canvas canvas) {
-    if (controller.connection != null) {
-      final connection = controller.connection!;
+    final connection = controller.connectionManager.connection;
+    if (connection != null) {
       final start =
           controller.transformationController.toScene(connection.startPosition);
       final end =
@@ -218,6 +210,9 @@ class FlowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant FlowPainter oldDelegate) {
-    return oldDelegate.controller != controller;
+    // The painter should repaint whenever the controller notifies its listeners.
+    // The `super(repaint: controller)` in the constructor handles this.
+    // This method can simply return false as the listener mechanism is sufficient.
+    return false;
   }
 }
