@@ -14,21 +14,6 @@ class NodeManager {
     return _state.getNode(nodeId);
   }
 
-  void selectNode(String nodeId, {bool multiSelect = false}) {
-    if (!_state.isMultiSelect) multiSelect = false;
-
-    if (!multiSelect) {
-      _state.selectedNodes.clear();
-    }
-    _state.selectedNodes.add(nodeId);
-
-    // Update node selection state
-    for (var node in _state.nodes) {
-      node.isSelected = _state.selectedNodes.contains(node.id);
-    }
-    _notify();
-  }
-
   // In FlowCanvasController class
   void dragNode(String nodeId, Offset delta) {
     final node = getNode(nodeId);
@@ -47,12 +32,43 @@ class NodeManager {
     _notify();
   }
 
+  void addNodes(List<FlowNode> nodes) {
+    for (final node in nodes) {
+      if (_state.nodes.any((n) => n.id == node.id)) {
+        throw ArgumentError('Node with id "${node.id}" already exists');
+      }
+      _state.nodes.add(node);
+    }
+    _notify();
+  }
+
   /// Removes a node and its connected edges from the canvas.
   void removeNode(String nodeId) {
     _state.nodes.removeWhere((node) => node.id == nodeId);
     _state.selectedNodes.remove(nodeId);
     _state.edges.removeWhere(
         (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
+    _notify();
+  }
+
+  void removeNodes(List<String> nodeIds) {
+    for (final nodeId in nodeIds) {
+      _state.nodes.removeWhere((node) => node.id == nodeId);
+      _state.selectedNodes.remove(nodeId);
+      _state.edges.removeWhere(
+          (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
+    }
+    _notify();
+  }
+
+  void removeSelectedNodes() {
+    final selectedIds = List<String>.from(_state.selectedNodes);
+    for (final nodeId in selectedIds) {
+      _state.nodes.removeWhere((node) => node.id == nodeId);
+      _state.selectedNodes.remove(nodeId);
+      _state.edges.removeWhere(
+          (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
+    }
     _notify();
   }
 
@@ -78,6 +94,34 @@ class NodeManager {
       node.cachedImage = image;
       node.needsRepaint = false;
       _notify();
+    }
+  }
+
+  void updateNodeData(String nodeId, Map<String, dynamic> data) {
+    final node = _state.getNode(nodeId);
+    if (node != null) {
+      node.updateData(data);
+      _notify();
+    }
+  }
+
+  void updateNode(
+    String nodeId, {
+    Offset? position,
+    Size? size,
+    Map<String, dynamic>? data,
+  }) {
+    final node = getNode(nodeId);
+    if (node == null) return;
+
+    if (position != null) {
+      updateNodePosition(nodeId, position);
+    }
+    if (size != null) {
+      updateNodeSize(nodeId, size);
+    }
+    if (data != null) {
+      updateNodeData(nodeId, data);
     }
   }
 

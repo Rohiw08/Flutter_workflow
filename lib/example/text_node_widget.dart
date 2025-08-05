@@ -12,22 +12,63 @@ class TextNodeWidget extends StatelessWidget {
       width: node.size.width,
       height: node.size.height,
       decoration: BoxDecoration(
-        color: Colors.lightBlue.shade50,
-        border: Border.all(color: Colors.blueAccent, width: 2),
+        color: node.isSelected
+            ? Colors.lightBlue.shade100
+            : Colors.lightBlue.shade50,
+        border: Border.all(
+          color: node.isSelected ? Colors.blue : Colors.blueAccent,
+          width: node.isSelected ? 3 : 2,
+        ),
         borderRadius: BorderRadius.circular(8),
+        boxShadow: node.isSelected
+            ? [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text(
-            node.data['title'] ?? 'Title',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          // Main content
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  node.data['title'] ?? 'Title',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: Text(
+                    node.data['description'] ?? 'Description goes here...',
+                    style: const TextStyle(fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 3,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            node.data['description'] ?? 'Description goes here...',
-            style: const TextStyle(fontSize: 14),
+          // Connection handles
+          Handle(
+            nodeId: node.id, // This should be dynamic
+            id: 'input',
+            position: HandlePosition.left,
+            type: HandleType.target,
+          ),
+          Handle(
+            nodeId: node.id, // This should be dynamic
+            id: 'output',
+            position: HandlePosition.right,
+            type: HandleType.source,
           ),
         ],
       ),

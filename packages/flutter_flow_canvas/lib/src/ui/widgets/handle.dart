@@ -95,6 +95,9 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   FlowCanvasController get controller => ref.read(flowControllerProvider);
 
+  String? _registeredNodeId;
+  String? _registeredHandleId;
+
   @override
   void initState() {
     super.initState();
@@ -125,10 +128,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        controller.connectionManager
-            .registerHandle(widget.nodeId, widget.id, _key);
-      }
+      _registerHandle();
     });
   }
 
@@ -136,8 +136,39 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   void dispose() {
     _scaleController.dispose();
     _pulseController.dispose();
-    controller.connectionManager.unregisterHandle(widget.nodeId, widget.id);
+    _unregisterHandle();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(Handle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Handle ID or node ID changed, re-register
+    if (oldWidget.nodeId != widget.nodeId || oldWidget.id != widget.id) {
+      _unregisterHandle();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _registerHandle();
+      });
+    }
+  }
+
+  void _registerHandle() {
+    if (mounted) {
+      controller.connectionManager
+          .registerHandle(widget.nodeId, widget.id, _key);
+      _registeredNodeId = widget.nodeId;
+      _registeredHandleId = widget.id;
+    }
+  }
+
+  void _unregisterHandle() {
+    if (_registeredNodeId != null && _registeredHandleId != null) {
+      controller.connectionManager
+          .unregisterHandle(_registeredNodeId!, _registeredHandleId!);
+      _registeredNodeId = null;
+      _registeredHandleId = null;
+    }
   }
 
   void _onPanStart(DragStartDetails details) {

@@ -39,7 +39,10 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     if (widget.interactive) {
       _focusNode.requestFocus();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _captureNodeImages());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _captureNodeImages();
+    });
   }
 
   @override
@@ -132,20 +135,15 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     required bool isInteractive,
     required bool isForCapture,
   }) {
-    // Correctly get the widget from the controller, which uses the node registry.
     final Widget? nodeWidget = controller.getNodeWidget(node);
 
-    // If the node type isn't registered, getNodeWidget will return null.
     if (nodeWidget == null) {
-      // You could also return a default error widget here for debugging.
-      return const SizedBox.shrink();
+      return _buildMissingNodeWidget(node);
     }
 
-    // Create a mutable variable that can be wrapped by other widgets.
     Widget finalWidget = nodeWidget;
 
-    // Wrap in RepaintBoundary if capturing.
-    // This must wrap the core widget first.
+    // Wrap in RepaintBoundary for image capture
     if (isForCapture) {
       finalWidget = RepaintBoundary(
         key: _nodeKeys[node.id],
@@ -156,21 +154,91 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       );
     }
 
-    // Wrap in GestureDetector if interactive.
-    // This should wrap everything else to capture all interactions.
+    // SMART INTERACTION HANDLING
     if (isInteractive) {
-      finalWidget = GestureDetector(
-        onTap: () => controller.nodeManager.selectNode(node.id),
-        onPanUpdate: (details) =>
-            controller.nodeManager.dragNode(node.id, details.delta),
-        child: finalWidget,
-      );
+      // Only add canvas-level interactions if node doesn't handle them
+      if (!node.hasCustomInteractions) {
+        finalWidget = _wrapWithCanvasInteractions(
+          child: finalWidget,
+          node: node,
+          controller: controller,
+        );
+      }
+      // If node has custom interactions, let it handle everything
     }
 
     return Positioned(
       left: node.position.dx,
       top: node.position.dy,
       child: finalWidget,
+    );
+  }
+
+  Widget _wrapWithCanvasInteractions({
+    required Widget child,
+    required FlowNode node,
+    required FlowCanvasController controller,
+  }) {
+    return GestureDetector(
+      // SELECTION HANDLING
+      onTap: node.isSelectable
+          ? () => controller.selectionManager.selectNode(node.id)
+          : null,
+
+      // DRAG HANDLING
+      onPanStart: node.isDraggable
+          ? (details) {
+              controller.interactionHandler.onNodeDragStart(node.id, details);
+            }
+          : null,
+
+      onPanUpdate: node.isDraggable
+          ? (details) {
+              controller.interactionHandler.onNodeDragUpdate(node.id, details);
+            }
+          : null,
+
+      onPanEnd: node.isDraggable
+          ? (details) {
+              controller.interactionHandler.onNodeDragEnd(node.id, details);
+            }
+          : null,
+
+      child: child,
+    );
+  }
+
+  Widget _buildMissingNodeWidget(FlowNode node) {
+    return Positioned(
+      left: node.position.dx,
+      top: node.position.dy,
+      child: Container(
+        width: node.size.width,
+        height: node.size.height,
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.3),
+          border: Border.all(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                'Unknown type:\n${node.type}',
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

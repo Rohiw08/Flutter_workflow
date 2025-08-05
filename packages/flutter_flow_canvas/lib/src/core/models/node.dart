@@ -19,13 +19,21 @@ class FlowNode {
   ui.Image? cachedImage;
   bool needsRepaint = true;
 
+  // NEW: Interaction configuration
+  final bool isDraggable;
+  final bool isSelectable;
+  final bool hasCustomInteractions;
+
   FlowNode({
     required this.id,
     required this.position,
     required this.size,
-    required this.type, // <-- force it
+    required this.type,
     this.data = const {},
     this.isSelected = false,
+    this.isDraggable = true, // Default: nodes are draggable
+    this.isSelectable = true, // Default: nodes are selectable
+    this.hasCustomInteractions = false, // Default: use canvas interactions
   });
 
   /// This is used by the MiniMap to get default styling values.
@@ -56,6 +64,25 @@ class FlowNode {
       type: type ?? this.type,
       data: data ?? this.data,
       isSelected: isSelected ?? this.isSelected,
+    )
+      ..cachedImage = cachedImage
+      ..needsRepaint = needsRepaint;
+  }
+
+  void updateData(Map<String, dynamic> newData) {
+    data = {...data, ...newData};
+    needsRepaint = true;
+  }
+
+  // MISSING: Clone method for state management
+  FlowNode clone() {
+    return FlowNode(
+      id: id,
+      position: position,
+      size: size,
+      type: type,
+      data: Map<String, dynamic>.from(data),
+      isSelected: isSelected,
     )
       ..cachedImage = cachedImage
       ..needsRepaint = needsRepaint;

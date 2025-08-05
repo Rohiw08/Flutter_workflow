@@ -104,4 +104,48 @@ class InteractionHandler {
     _state.selectionRect = null;
     _notify();
   }
+
+  // NEW: Node-specific drag methods
+  void onNodeDragStart(String nodeId, DragStartDetails details) {
+    final node = _state.getNode(nodeId);
+    if (node == null || !node.isDraggable) return;
+
+    _state.dragMode = DragMode.node;
+    _state.lastPanPosition = details.localPosition;
+    _state.lastCanvasPosition =
+        _transformationController.toScene(details.localPosition);
+
+    // Handle multi-selection
+    if (_state.isMultiSelect) {
+      if (node.isSelected) {
+        _selectionManager.deselectNode(nodeId);
+      } else {
+        _selectionManager.selectNode(nodeId, multiSelect: true);
+      }
+    } else if (!node.isSelected) {
+      _selectionManager.selectNode(nodeId);
+    }
+
+    _notify();
+  }
+
+  void onNodeDragUpdate(String nodeId, DragUpdateDetails details) {
+    if (_state.dragMode != DragMode.node) return;
+
+    final currentCanvasOffset =
+        _transformationController.toScene(details.localPosition);
+    if (_state.lastCanvasPosition != null) {
+      final canvasDelta = currentCanvasOffset - _state.lastCanvasPosition!;
+      _nodeManager.dragSelectedNodes(canvasDelta);
+      _state.lastCanvasPosition = currentCanvasOffset;
+    }
+    _notify();
+  }
+
+  void onNodeDragEnd(String nodeId, DragEndDetails details) {
+    _state.dragMode = DragMode.none;
+    _state.lastPanPosition = null;
+    _state.lastCanvasPosition = null;
+    _notify();
+  }
 }
