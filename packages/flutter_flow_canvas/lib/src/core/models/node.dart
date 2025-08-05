@@ -11,7 +11,8 @@ class FlowNode {
   final String id;
   Offset position;
   Size size;
-  final NodeData data;
+  String type;
+  Map<String, dynamic> data;
   bool isSelected;
 
   // For widget-to-image caching
@@ -22,7 +23,8 @@ class FlowNode {
     required this.id,
     required this.position,
     required this.size,
-    required this.data,
+    required this.type, // <-- force it
+    this.data = const {},
     this.isSelected = false,
   });
 
@@ -32,7 +34,8 @@ class FlowNode {
       id: '_empty_',
       position: Offset.zero,
       size: Size.zero,
-      data: NodeData(),
+      data: const {},
+      type: 'default', // Default type
     );
   }
 
@@ -43,12 +46,15 @@ class FlowNode {
     Offset? position,
     Size? size,
     bool? isSelected,
+    String? type,
+    Map<String, dynamic>? data,
   }) {
     return FlowNode(
       id: id,
       position: position ?? this.position,
       size: size ?? this.size,
-      data: data,
+      type: type ?? this.type,
+      data: data ?? this.data,
       isSelected: isSelected ?? this.isSelected,
     )
       ..cachedImage = cachedImage

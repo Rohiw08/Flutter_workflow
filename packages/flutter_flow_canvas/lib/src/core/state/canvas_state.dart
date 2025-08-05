@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../flutter_flow_canvas.dart';
-import '../enums.dart';
 
 class FlowCanvasState {
   // Core data
   final List<FlowNode> nodes = [];
   final List<FlowEdge> edges = [];
-  final Map<String, Widget> nodeBuilders = {};
+  // final Map<String, Widget> nodeBuilders = {}; // REMOVED
   final Set<String> selectedNodes = {};
 
   // Interaction state
@@ -37,7 +36,7 @@ class FlowCanvasState {
   void clear() {
     nodes.clear();
     edges.clear();
-    nodeBuilders.clear();
+    // nodeBuilders.clear(); // REMOVED
     selectedNodes.clear();
     handleRegistry.clear();
     connection = null;

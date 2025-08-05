@@ -56,8 +56,8 @@ class ConnectionManager {
   }
 
   void updateConnection(Offset globalPosition) {
-    if (_state.connection == null) return;
-    _state.connection!.endPosition = globalPosition;
+    if (connection == null) return;
+    connection!.endPosition = globalPosition;
 
     String? hoveredKey;
     for (final entry in _state.handleRegistry.entries) {
@@ -66,14 +66,14 @@ class ConnectionManager {
       if (renderBox != null &&
           renderBox.hitTest(BoxHitTestResult(),
               position: renderBox.globalToLocal(globalPosition))) {
-        if ('${_state.connection!.fromNodeId}/${_state.connection!.fromHandleId}' !=
+        if ('${connection!.fromNodeId}/${connection!.fromHandleId}' !=
             entry.key) {
           hoveredKey = entry.key;
           break;
         }
       }
     }
-    _state.connection!.hoveredTargetKey = hoveredKey;
+    connection!.hoveredTargetKey = hoveredKey;
     _notify();
   }
 

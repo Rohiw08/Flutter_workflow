@@ -57,6 +57,20 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     super.dispose();
   }
 
+  bool _pendingNodeKeysUpdate = false;
+
+  void _scheduleUpdateNodeKeys(FlowCanvasController controller) {
+    if (_pendingNodeKeysUpdate) return;
+    _pendingNodeKeysUpdate = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateNodeKeys(controller);
+        _pendingNodeKeysUpdate = false;
+      }
+    });
+  }
+
   void _updateNodeKeys(FlowCanvasController controller) {
     final newKeys = <String, GlobalKey>{};
     for (final node in controller.nodes) {
@@ -70,18 +84,40 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   void _captureNodeImages() async {
-    if (!mounted) return;
-    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final controller = ref.read(flowControllerProvider);
+    if (!mounted || _nodeKeys.isEmpty) return;
 
-    for (final nodeId in _nodeKeys.keys) {
-      final boundary = _nodeKeys[nodeId]?.currentContext?.findRenderObject()
+    final controller = ref.read(flowControllerProvider);
+    final nodesToRepaint =
+        controller.nodes.where((n) => n.needsRepaint).toList();
+    if (nodesToRepaint.isEmpty) return;
+
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+
+    // 1. Create a list of futures. Each future will eventually return a tuple or null.
+    final futures = _nodeKeys.entries.map((entry) async {
+      final nodeId = entry.key;
+      final boundary = entry.value.currentContext?.findRenderObject()
           as RenderRepaintBoundary?;
       if (boundary != null) {
         final image = await boundary.toImage(pixelRatio: pixelRatio);
-        if (mounted) {
-          controller.nodeManager.updateNodeImage(nodeId, image);
-        }
+        return (nodeId, image); // This is a Future<(String, ui.Image)>
+      }
+      return null; // This is a Future<null>
+    }).toList(); // Convert to a list to pass to Future.wait
+
+    // 2. Await all the futures to complete in parallel.
+    // The result is a list of the resolved values (tuples or nulls).
+    final results = await Future.wait(futures);
+
+    if (!mounted) return;
+
+    // 3. Now, process the results.
+    // We iterate through the list of captured images and update the controller.
+    for (final result in results) {
+      if (result != null) {
+        // The 'result' is the (String, ui.Image) tuple.
+        final (nodeId, image) = result;
+        controller.nodeManager.updateNodeImage(nodeId, image);
       }
     }
   }
@@ -89,6 +125,54 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   Size _canvasSize(FlowCanvasController controller) =>
       widget.canvasSize ??
       Size(controller.canvasWidth, controller.canvasHeight);
+
+  Widget _buildNode({
+    required FlowCanvasController controller,
+    required FlowNode node,
+    required bool isInteractive,
+    required bool isForCapture,
+  }) {
+    // Correctly get the widget from the controller, which uses the node registry.
+    final Widget? nodeWidget = controller.getNodeWidget(node);
+
+    // If the node type isn't registered, getNodeWidget will return null.
+    if (nodeWidget == null) {
+      // You could also return a default error widget here for debugging.
+      return const SizedBox.shrink();
+    }
+
+    // Create a mutable variable that can be wrapped by other widgets.
+    Widget finalWidget = nodeWidget;
+
+    // Wrap in RepaintBoundary if capturing.
+    // This must wrap the core widget first.
+    if (isForCapture) {
+      finalWidget = RepaintBoundary(
+        key: _nodeKeys[node.id],
+        child: Material(
+          type: MaterialType.transparency,
+          child: finalWidget,
+        ),
+      );
+    }
+
+    // Wrap in GestureDetector if interactive.
+    // This should wrap everything else to capture all interactions.
+    if (isInteractive) {
+      finalWidget = GestureDetector(
+        onTap: () => controller.nodeManager.selectNode(node.id),
+        onPanUpdate: (details) =>
+            controller.nodeManager.dragNode(node.id, details.delta),
+        child: finalWidget,
+      );
+    }
+
+    return Positioned(
+      left: node.position.dx,
+      top: node.position.dy,
+      child: finalWidget,
+    );
+  }
 
   Widget _buildCanvasContent(FlowCanvasController controller) {
     // Dynamically disable InteractiveViewer's panning when dragging nodes or box selecting
@@ -111,95 +195,114 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
               }
             }
           : null,
-      child: GestureDetector(
-        onPanStart: widget.interactive
-            ? controller.interactionHandler.onPanStart
-            : null,
-        onPanUpdate: widget.interactive
-            ? controller.interactionHandler.onPanUpdate
-            : null,
-        onPanEnd:
-            widget.interactive ? controller.interactionHandler.onPanEnd : null,
-        child: InteractiveViewer(
-          transformationController: controller.transformationController,
-          constrained: false,
-          boundaryMargin: const EdgeInsets.all(0),
-          minScale: widget.minScale,
-          maxScale: widget.maxScale,
-          panEnabled: isPanningEnabled,
-          scaleEnabled: widget.interactive,
-          child: SizedBox(
-            width: _canvasSize(controller).width,
-            height: _canvasSize(controller).height,
-            child: Stack(
-              children: [
-                CustomPaint(
-                  size: Size(controller.canvasWidth, controller.canvasHeight),
-                  painter: BackgroundPainter(
-                    matrix: controller.transformationController.value,
-                    variant: widget.backgroundVariant,
-                  ),
+      child: InteractiveViewer(
+        transformationController: controller.transformationController,
+        constrained: false,
+        boundaryMargin: const EdgeInsets.all(0),
+        minScale: widget.minScale,
+        maxScale: widget.maxScale,
+        panEnabled: isPanningEnabled,
+        scaleEnabled: widget.interactive,
+        child: SizedBox(
+          width: _canvasSize(controller).width,
+          height: _canvasSize(controller).height,
+          child: Stack(
+            children: [
+              // paint background first
+              CustomPaint(
+                size: Size(controller.canvasWidth, controller.canvasHeight),
+                painter: BackgroundPainter(
+                  matrix: controller.transformationController.value,
+                  variant: widget.backgroundVariant,
                 ),
-                CustomPaint(
-                  size: Size(controller.canvasWidth, controller.canvasHeight),
-                  painter: FlowPainter(controller: controller),
+              ),
+
+              // paint flow
+              CustomPaint(
+                size: Size(controller.canvasWidth, controller.canvasHeight),
+                painter: FlowPainter(controller: controller),
+              ),
+
+              // VISIBLE NODES LAYER
+              ...controller.nodes.map(
+                (node) {
+                  return _buildNode(
+                      controller: controller,
+                      node: node,
+                      isInteractive: isPanningEnabled,
+                      isForCapture: false);
+                },
+              ),
+
+              // Offstage stack for rendering nodes to images (for caching)
+              Offstage(
+                offstage: true,
+                child: Stack(
+                  children: [
+                    ...controller.nodes.where((n) => n.needsRepaint).map(
+                      (node) {
+                        return _buildNode(
+                            controller: controller,
+                            node: node,
+                            isInteractive: isPanningEnabled,
+                            isForCapture: true);
+                      },
+                    ),
+                  ],
                 ),
-                ...controller.nodes.map((node) {
-                  final nodeWidget = controller.getNodeWidget(node.id);
-                  if (nodeWidget == null) return const SizedBox.shrink();
-                  return Positioned(
-                    left: node.position.dx,
-                    top: node.position.dy,
-                    child: nodeWidget,
-                  );
-                }),
-                Offstage(
-                  offstage: true,
-                  child: Stack(
-                    children: controller.nodes
-                        .where((n) => n.needsRepaint)
-                        .map((node) {
-                      final nodeWidget = controller.getNodeWidget(node.id);
-                      if (nodeWidget == null) return const SizedBox.shrink();
-                      return RepaintBoundary(
-                        key: _nodeKeys[node.id],
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: nodeWidget,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = ref.watch(flowControllerProvider);
-    _updateNodeKeys(controller);
-
-    return KeyboardListener(
+  Widget _buildInteractiveCanvas(FlowCanvasController controller) {
+    return Focus(
       focusNode: _focusNode,
-      onKeyEvent:
-          widget.interactive ? controller.keyboardHandler.handleKeyEvent : null,
-      child: Container(
-        color: widget.backgroundColor,
+      onKeyEvent: (node, event) {
+        bool isHandled = controller.keyboardHandler.handleKeyEvent(event);
+        return isHandled ? KeyEventResult.handled : KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: () {
+          if (widget.interactive) {
+            _focusNode.requestFocus();
+          }
+        },
         child: Stack(
           children: [
             _buildCanvasContent(controller),
-            if (widget.showControls)
-              const FlowCanvasControls(
-                alignment: ControlPanelAlignment.bottomLeft,
-                orientation: Axis.vertical,
-              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStaticCanvas(FlowCanvasController controller) {
+    return _buildCanvasContent(controller);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = ref.watch(flowControllerProvider);
+    _scheduleUpdateNodeKeys(controller);
+
+    return Container(
+      color: widget.backgroundColor,
+      child: Stack(
+        children: [
+          if (widget.interactive)
+            _buildInteractiveCanvas(controller)
+          else
+            _buildStaticCanvas(controller),
+          if (widget.showControls)
+            const FlowCanvasControls(
+              alignment: ControlPanelAlignment.bottomLeft,
+              orientation: Axis.vertical,
+            ),
+        ],
       ),
     );
   }

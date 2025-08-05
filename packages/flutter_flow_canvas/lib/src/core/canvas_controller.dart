@@ -10,6 +10,7 @@ import 'handlers/keyboard_handler.dart';
 import 'models/node.dart';
 import 'models/edge.dart';
 import 'enums.dart';
+import 'state/node_registry.dart';
 
 class FlowCanvasController extends ChangeNotifier {
   // State and Transformation
@@ -39,12 +40,16 @@ class FlowCanvasController extends ChangeNotifier {
   double get canvasWidth => _state.canvasWidth;
   double get canvasHeight => _state.canvasHeight;
 
+  // Registory
+  final NodeRegistry nodeRegistry;
+
   FlowCanvasController({
     bool enableMultiSelection = true,
     bool enableKeyboardShortcuts = true,
     bool enableBoxSelection = true,
     double canvasWidth = 5000,
     double canvasHeight = 5000,
+    required this.nodeRegistry,
   }) {
     _state.enableMultiSelection = enableMultiSelection;
     _state.enableKeyboardShortcuts = enableKeyboardShortcuts;
@@ -69,9 +74,10 @@ class FlowCanvasController extends ChangeNotifier {
   }
 
   // Utility methods
-  Widget? getNodeWidget(String nodeId) => _state.nodeBuilders[nodeId];
+  Widget? getNodeWidget(FlowNode node) {
+    return nodeRegistry.buildNodeWidget(node);
+  }
 
-  /// ✨ FIX: Added the missing method to calculate the bounding box of all nodes.
   /// This is useful for features like a minimap or fitting the view.
   Rect getNodesBounds() {
     if (_state.nodes.isEmpty) return Rect.zero;

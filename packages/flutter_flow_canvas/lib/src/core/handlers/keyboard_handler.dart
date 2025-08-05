@@ -13,8 +13,8 @@ class KeyboardHandler {
   KeyboardHandler(this._state, this._selectionManager, this._nodeManager,
       this._connectionManager);
 
-  void handleKeyEvent(KeyEvent event) {
-    if (!_state.enableKeyboardShortcuts) return;
+  bool handleKeyEvent(KeyEvent event) {
+    if (!_state.enableKeyboardShortcuts) return false;
 
     if (event is KeyDownEvent) {
       final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
@@ -32,5 +32,6 @@ class KeyboardHandler {
         _connectionManager.cancelConnection();
       }
     }
+    return false;
   }
 }

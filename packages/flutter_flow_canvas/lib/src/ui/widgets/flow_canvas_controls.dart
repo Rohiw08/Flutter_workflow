@@ -6,7 +6,6 @@ import 'package:flutter_flow_canvas/src/ui/widgets/helper/alignment_helper.dart'
 import 'package:flutter_flow_canvas/src/ui/widgets/helper/default_action_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
-import '../../core/providers.dart';
 
 class FlowCanvasControls extends ConsumerWidget {
   final bool showDefaultActions;
