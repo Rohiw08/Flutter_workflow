@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_flow_canvas/src/core/state/edge_registry.dart';
 import 'state/canvas_state.dart';
 import 'managers/node_manager.dart';
 import 'managers/edge_manager.dart';
@@ -11,6 +12,8 @@ import 'models/node.dart';
 import 'models/edge.dart';
 import 'enums.dart';
 import 'state/node_registry.dart';
+
+typedef CanvasInitCallback = void Function(FlowCanvasController controller);
 
 class FlowCanvasController extends ChangeNotifier {
   // State and Transformation
@@ -42,6 +45,9 @@ class FlowCanvasController extends ChangeNotifier {
 
   // Registory
   final NodeRegistry nodeRegistry;
+  final EdgeRegistry edgeRegistry;
+
+  GlobalKey? interactiveViewerKey;
 
   FlowCanvasController({
     bool enableMultiSelection = true,
@@ -50,6 +56,7 @@ class FlowCanvasController extends ChangeNotifier {
     double canvasWidth = 5000,
     double canvasHeight = 5000,
     required this.nodeRegistry,
+    required this.edgeRegistry,
   }) {
     _state.enableMultiSelection = enableMultiSelection;
     _state.enableKeyboardShortcuts = enableKeyboardShortcuts;
@@ -59,7 +66,7 @@ class FlowCanvasController extends ChangeNotifier {
 
     // Initialize managers and handlers
     void notify() => notifyListeners();
-    nodeManager = NodeManager(_state, notify);
+    nodeManager = NodeManager(_state, notify, nodeRegistry);
     edgeManager = EdgeManager(_state, notify);
     selectionManager = SelectionManager(_state, notify);
     connectionManager = ConnectionManager(_state, notify, edgeManager);
@@ -71,6 +78,10 @@ class FlowCanvasController extends ChangeNotifier {
         _state, selectionManager, nodeManager, connectionManager);
 
     transformationController.addListener(notify);
+  }
+
+  void setInteractiveViewerKey(GlobalKey key) {
+    interactiveViewerKey = key;
   }
 
   // Utility methods

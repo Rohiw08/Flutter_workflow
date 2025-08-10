@@ -1,5 +1,12 @@
+import 'dart:convert'; // Import dart:convert
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
+
+/// A utility function to perform a deep copy of a map.
+Map<String, dynamic> _deepCopy(Map<String, dynamic> map) {
+  return json.decode(json.encode(map));
+}
 
 /// A base class for node data. Extend this to add your own data to a node.
 class NodeData {
@@ -29,12 +36,12 @@ class FlowNode {
     required this.position,
     required this.size,
     required this.type,
-    this.data = const {},
+    Map<String, dynamic> data = const {}, // Accept the incoming data
     this.isSelected = false,
     this.isDraggable = true, // Default: nodes are draggable
     this.isSelectable = true, // Default: nodes are selectable
     this.hasCustomInteractions = false, // Default: use canvas interactions
-  });
+  }) : data = _deepCopy(data); // Immediately deep copy the data
 
   /// This is used by the MiniMap to get default styling values.
   factory FlowNode.empty() {
@@ -45,6 +52,29 @@ class FlowNode {
       data: const {},
       type: 'default', // Default type
     );
+  }
+
+  factory FlowNode.create({
+    required Offset position,
+    required Size size,
+    required String type,
+    Map<String, dynamic> data = const {},
+    bool isSelected = false,
+    bool isDraggable = true,
+    bool isSelectable = true,
+    bool hasCustomInteractions = false,
+  }) {
+    final id = 'node_${Random().nextDouble()}'; // Simple unique ID generation
+    return FlowNode(
+        id: id,
+        position: position,
+        size: size,
+        type: type,
+        data: data,
+        isSelected: isSelected,
+        isDraggable: isDraggable,
+        isSelectable: isSelectable,
+        hasCustomInteractions: hasCustomInteractions);
   }
 
   Rect get rect =>
@@ -62,27 +92,35 @@ class FlowNode {
       position: position ?? this.position,
       size: size ?? this.size,
       type: type ?? this.type,
-      data: data ?? this.data,
+      data: data ??
+          _deepCopy(this
+              .data), // Use deep copy of existing data if new data isn't provided
       isSelected: isSelected ?? this.isSelected,
     )
       ..cachedImage = cachedImage
       ..needsRepaint = needsRepaint;
   }
 
-  void updateData(Map<String, dynamic> newData) {
-    data = {...data, ...newData};
-    needsRepaint = true;
+  void updateData(Map<String, dynamic> newData, {bool visualUpdate = true}) {
+    // Create a new map by merging the old and new, then deep copy it.
+    data = _deepCopy({...data, ...newData});
+    if (visualUpdate) {
+      needsRepaint = true;
+    }
   }
 
-  // MISSING: Clone method for state management
+  /// Creates a deep copy of this node.
   FlowNode clone() {
     return FlowNode(
       id: id,
       position: position,
       size: size,
       type: type,
-      data: Map<String, dynamic>.from(data),
+      data: _deepCopy(data), // Use deep copy for the data
       isSelected: isSelected,
+      isDraggable: isDraggable,
+      isSelectable: isSelectable,
+      hasCustomInteractions: hasCustomInteractions,
     )
       ..cachedImage = cachedImage
       ..needsRepaint = needsRepaint;

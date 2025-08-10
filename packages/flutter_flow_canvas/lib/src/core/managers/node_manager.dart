@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import '../../../flutter_flow_canvas.dart';
 import '../state/canvas_state.dart';
 import 'dart:ui' as ui;
-import '../models/node.dart';
 
 class NodeManager {
   final FlowCanvasState _state;
   final VoidCallback _notify;
+  final NodeRegistry _nodeRegistry;
 
-  NodeManager(this._state, this._notify);
+  NodeManager(this._state, this._notify, this._nodeRegistry);
 
   /// Get a node by its ID.
   FlowNode? getNode(String nodeId) {
@@ -28,6 +29,11 @@ class NodeManager {
     if (_state.nodes.any((n) => n.id == node.id)) {
       throw ArgumentError('Node with id "${node.id}" already exists');
     }
+    // VALIDATION: Check if the node type is registered
+    if (!_nodeRegistry.isRegistered(node.type)) {
+      throw ArgumentError(
+          'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding the node.');
+    }
     _state.nodes.add(node);
     _notify();
   }
@@ -36,6 +42,11 @@ class NodeManager {
     for (final node in nodes) {
       if (_state.nodes.any((n) => n.id == node.id)) {
         throw ArgumentError('Node with id "${node.id}" already exists');
+      }
+      // VALIDATION: Check each node type in the list
+      if (!_nodeRegistry.isRegistered(node.type)) {
+        throw ArgumentError(
+            'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding nodes.');
       }
       _state.nodes.add(node);
     }

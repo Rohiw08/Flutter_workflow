@@ -6,13 +6,38 @@ import '../../../utils/edge_path_creator.dart';
 class FlowPainter extends CustomPainter {
   final FlowCanvasController controller;
 
+  final Paint _nodePaint = Paint();
+  late final Paint _selectionPaint = Paint()
+    ..color = Colors.blue.withAlpha(25)
+    ..style = PaintingStyle.fill;
+  final Paint _edgePaint = Paint()
+    ..color = Colors.grey.shade600
+    ..strokeWidth = 2.0
+    ..style = PaintingStyle.stroke;
+  final Paint _selectedEdgePaint = Paint()
+    ..color = Colors.blue
+    ..strokeWidth = 3.0
+    ..style = PaintingStyle.stroke;
+
   FlowPainter({required this.controller}) : super(repaint: controller);
 
   Offset? _getHandlePosition(String nodeId, String handleId) {
-    final globalPos =
+    final handleGlobalPos =
         controller.connectionManager.getHandleGlobalPosition(nodeId, handleId);
-    if (globalPos != null) {
-      return controller.transformationController.toScene(globalPos);
+    final ivKey = controller.interactiveViewerKey;
+
+    if (handleGlobalPos != null && ivKey?.currentContext != null) {
+      final ivRenderBox =
+          ivKey?.currentContext!.findRenderObject() as RenderBox;
+
+      // Get the top-left position of the InteractiveViewer on the screen
+      final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
+
+      // Subtract the InteractiveViewer's position to get the handle's position relative to the viewport
+      final handleViewportPos = handleGlobalPos - ivGlobalPos;
+
+      // Now, convert the viewport-local position to a scene-local position
+      return controller.transformationController.toScene(handleViewportPos);
     }
     return null;
   }
@@ -24,78 +49,72 @@ class FlowPainter extends CustomPainter {
     final canvasRect =
         MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
-    // Draw edges first
+    // Draw in optimal order for performance
+    _drawNodes(canvas, canvasRect, matrix); // Pass matrix here
     _drawEdges(canvas, canvasRect);
-
-    // Then draw nodes on top
-    _drawNodes(canvas, canvasRect);
-
-    // Draw in-progress connection
-    _drawConnection(canvas);
-
-    // Draw selection rectangle
-    _drawSelectionRect(canvas, matrix);
+    _drawConnection(canvas, matrix);
+    _drawSelectionRect(canvas, matrix); // Pass matrix here
   }
 
-  void _drawNodes(Canvas canvas, Rect canvasRect) {
-    final nodePaint = Paint();
-    // Define a paint for the selection border
-    final borderPaint = Paint()
-      ..color = Colors.blue
-      ..strokeWidth = 1.0 // Adjust thickness as needed
-      ..style = PaintingStyle.stroke;
+  void _drawNodes(Canvas canvas, Rect canvasRect, Matrix4 matrix) {
+    // Early exit if no nodes
+    if (controller.nodes.isEmpty) return;
+
+    final visibleNodes = <FlowNode>[];
+    final selectedNodes = <FlowNode>[];
 
     for (final node in controller.nodes) {
-      // Culling check
       if (!canvasRect.overlaps(node.rect.inflate(100))) continue;
-
-      // Draw the cached node image
-      if (node.cachedImage != null) {
-        canvas.drawImage(node.cachedImage!, node.position, nodePaint);
-      }
-
-      // If the node is selected, draw a border on top
+      visibleNodes.add(node);
       if (node.isSelected) {
-        // Use node.rect and inflate it slightly so the border is on the outside
-        canvas.drawRect(node.rect.inflate(1.0), borderPaint);
+        selectedNodes.add(node);
       }
     }
+
+    // Draw all cached images in one batch
+    for (final node in visibleNodes) {
+      if (node.cachedImage != null) {
+        canvas.drawImage(node.cachedImage!, node.position, _nodePaint);
+      }
+    }
+
+    // // Draw selection borders in another batch
+    // for (final node in selectedNodes) {
+    //   canvas.drawRect(node.rect.inflate(1.0), _borderPaint);
+    // }
   }
 
   void _drawEdges(Canvas canvas, Rect canvasRect) {
-    final edgePaint = Paint()
-      ..color = Colors.grey.shade600
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    final selectedEdgePaint = Paint()
-      ..color = Colors.blue
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
     for (final edge in controller.edges) {
       final start = _getHandlePosition(edge.sourceNodeId, edge.sourceHandleId);
       final end = _getHandlePosition(edge.targetNodeId, edge.targetHandleId);
 
       if (start != null && end != null) {
-        // Check if edge should be culled
         final edgeRect = Rect.fromPoints(start, end);
         if (!canvasRect.overlaps(edgeRect.inflate(50))) continue;
 
-        final path = EdgePathCreator.createPath(edge.type, start, end);
-
-        final sourceSelected = controller.selectionManager.selectedNodes
-            .contains(edge.sourceNodeId);
-        final targetSelected = controller.selectionManager.selectedNodes
-            .contains(edge.targetNodeId);
-        final isSelected = sourceSelected || targetSelected;
-
+        final isSelected =
+            controller.selectedNodes.contains(edge.sourceNodeId) ||
+                controller.selectedNodes.contains(edge.targetNodeId);
         final paint =
-            edge.paint ?? (isSelected ? selectedEdgePaint : edgePaint);
-        canvas.drawPath(path, paint);
+            edge.paint ?? (isSelected ? _selectedEdgePaint : _edgePaint);
 
-        // Draw arrow head
-        _drawArrowHead(canvas, start, end, paint);
+        // --- REFINED LOGIC ---
+        // 1. Always create the base path first.
+        final path = EdgePathCreator.createPath(edge.pathType, start, end);
+
+        // 2. Look for a custom painter in the registry.
+        final customPainter =
+            controller.edgeRegistry.getPainter(edge.type ?? '');
+
+        if (customPainter != null) {
+          // 3. If found, pass the canvas and the path to it.
+          customPainter.paint(canvas, path, edge, paint);
+        } else {
+          // 4. Otherwise, use the default drawing logic.
+          canvas.drawPath(path, paint);
+          _drawArrowHead(canvas, start, end, paint);
+        }
       }
     }
   }
@@ -113,51 +132,58 @@ class FlowPainter extends CustomPainter {
       ..lineTo(arrowPoint2.dx, arrowPoint2.dy)
       ..close();
 
-    canvas.drawPath(arrowPath, paint..style = PaintingStyle.fill);
-    paint.style = PaintingStyle.stroke; // Reset to stroke
+    final originalStyle = paint.style; // Store the original style
+    paint.style = PaintingStyle.fill;
+    canvas.drawPath(arrowPath, paint);
+    paint.style = originalStyle;
   }
 
-  void _drawConnection(Canvas canvas) {
+  void _drawConnection(Canvas canvas, Matrix4 matrix) {
     final connection = controller.connectionManager.connection;
-    if (connection != null) {
-      final start =
-          controller.transformationController.toScene(connection.startPosition);
-      final end =
-          controller.transformationController.toScene(connection.endPosition);
+    if (connection == null) return;
 
-      final connectionPaint = Paint()
-        ..color = connection.hoveredTargetKey != null
-            ? Colors.green
-            : Colors.blueAccent
-        ..strokeWidth = 2.0
-        ..style = PaintingStyle.stroke;
+    final ivKey = controller.interactiveViewerKey;
 
-      final path = EdgePathCreator.createPath(EdgeType.bezier, start, end);
-      canvas.drawPath(path, connectionPaint);
+    // Ensure the InteractiveViewer key is available
+    if (ivKey?.currentContext == null) return;
 
-      // Draw connection end indicator
-      final endPaint = Paint()
-        ..color = connection.hoveredTargetKey != null
-            ? Colors.green
-            : Colors.blueAccent
-        ..style = PaintingStyle.fill;
+    final ivRenderBox = ivKey?.currentContext!.findRenderObject() as RenderBox;
+    final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
 
-      canvas.drawCircle(end, 6.0, endPaint);
-    }
+    // --- Correctly transform the start position (the handle) ---
+    final startViewportPos = connection.startPosition - ivGlobalPos;
+    final start = controller.transformationController.toScene(startViewportPos);
+
+    // --- Correctly transform the end position (the cursor) ---
+    final endViewportPos = connection.endPosition - ivGlobalPos;
+    final end = controller.transformationController.toScene(endViewportPos);
+
+    // The rest of the drawing logic remains the same
+    final connectionPaint = Paint()
+      ..color =
+          connection.hoveredTargetKey != null ? Colors.green : Colors.blueAccent
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final path = EdgePathCreator.createPath(EdgePathType.bezier, start, end);
+    canvas.drawPath(path, connectionPaint);
+
+    final endPaint = Paint()
+      ..color =
+          connection.hoveredTargetKey != null ? Colors.green : Colors.blueAccent
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(end, 6.0, endPaint);
   }
 
   void _drawSelectionRect(Canvas canvas, Matrix4 matrix) {
-    if (controller.selectionRect != null) {
-      final selectionPaint = Paint()
-        ..color = Colors.blue.withAlpha(25) // Using withAlpha as requested
-        ..style = PaintingStyle.fill;
+    final selectionRect = controller.selectionRect;
+    if (selectionRect == null) return;
 
-      canvas.drawRect(controller.selectionRect!, selectionPaint);
+    canvas.drawRect(selectionRect, _selectionPaint);
 
-      // Draw dashed border manually
-      _drawDashedRect(canvas, controller.selectionRect!, Colors.blue,
-          1.0 / matrix.getMaxScaleOnAxis());
-    }
+    final strokeWidth = (1.0 / matrix.getMaxScaleOnAxis()).clamp(0.5, 3.0);
+    _drawDashedRect(canvas, selectionRect, Colors.blue, strokeWidth);
   }
 
   void _drawDashedRect(
@@ -167,52 +193,39 @@ class FlowPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
 
-    const double dashLength = 5.0;
-    const double gapLength = 5.0;
+    final path = Path()
+      ..addPath(_createDashedLine(rect.topLeft, rect.topRight), Offset.zero)
+      ..addPath(_createDashedLine(rect.topRight, rect.bottomRight), Offset.zero)
+      ..addPath(
+          _createDashedLine(rect.bottomRight, rect.bottomLeft), Offset.zero)
+      ..addPath(_createDashedLine(rect.bottomLeft, rect.topLeft), Offset.zero);
 
-    // Top edge
-    _drawDashedLine(
-        canvas, rect.topLeft, rect.topRight, paint, dashLength, gapLength);
-    // Right edge
-    _drawDashedLine(
-        canvas, rect.topRight, rect.bottomRight, paint, dashLength, gapLength);
-    // Bottom edge
-    _drawDashedLine(canvas, rect.bottomRight, rect.bottomLeft, paint,
-        dashLength, gapLength);
-    // Left edge
-    _drawDashedLine(
-        canvas, rect.bottomLeft, rect.topLeft, paint, dashLength, gapLength);
+    canvas.drawPath(path, paint);
   }
 
-  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint,
-      double dashLength, double gapLength) {
+  Path _createDashedLine(Offset start, Offset end,
+      [double dashLength = 5.0, double gapLength = 5.0]) {
+    final path = Path();
     final distance = (end - start).distance;
     final unitVector = (end - start) / distance;
-
     double currentDistance = 0.0;
-    bool isDash = true;
-
     while (currentDistance < distance) {
-      final segmentLength = isDash ? dashLength : gapLength;
-      final nextDistance =
-          (currentDistance + segmentLength).clamp(0.0, distance);
-
-      if (isDash) {
-        final segmentStart = start + unitVector * currentDistance;
-        final segmentEnd = start + unitVector * nextDistance;
-        canvas.drawLine(segmentStart, segmentEnd, paint);
+      path.moveTo(start.dx + unitVector.dx * currentDistance,
+          start.dy + unitVector.dy * currentDistance);
+      final nextDistance = currentDistance + dashLength;
+      if (nextDistance < distance) {
+        path.lineTo(start.dx + unitVector.dx * nextDistance,
+            start.dy + unitVector.dy * nextDistance);
+      } else {
+        path.lineTo(end.dx, end.dy);
       }
-
-      currentDistance = nextDistance;
-      isDash = !isDash;
+      currentDistance = nextDistance + gapLength;
     }
+    return path;
   }
 
   @override
   bool shouldRepaint(covariant FlowPainter oldDelegate) {
-    // The painter should repaint whenever the controller notifies its listeners.
-    // The `super(repaint: controller)` in the constructor handles this.
-    // This method can simply return false as the listener mechanism is sufficient.
-    return false;
+    return oldDelegate.controller != controller;
   }
 }

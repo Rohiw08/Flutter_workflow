@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'painters/background_painter.dart';
@@ -14,16 +15,18 @@ class FlowCanvas extends ConsumerStatefulWidget {
   final bool interactive;
   final Size? canvasSize;
 
-  const FlowCanvas({
-    super.key,
-    this.backgroundVariant = BackgroundVariant.dots,
-    this.showControls = true,
-    this.backgroundColor,
-    this.minScale = 0.1,
-    this.maxScale = 2.0,
-    this.interactive = true,
-    this.canvasSize,
-  });
+  final CanvasInitCallback? onCanvasInit;
+
+  const FlowCanvas(
+      {super.key,
+      this.backgroundVariant = BackgroundVariant.dots,
+      this.showControls = true,
+      this.backgroundColor,
+      this.minScale = 0.1,
+      this.maxScale = 2.0,
+      this.interactive = true,
+      this.canvasSize,
+      this.onCanvasInit});
 
   @override
   ConsumerState<FlowCanvas> createState() => _FlowCanvasState();
@@ -33,24 +36,64 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   final FocusNode _focusNode = FocusNode();
   final Map<String, GlobalKey> _nodeKeys = {};
 
+  final GlobalKey _interactiveViewerKey = GlobalKey();
+
+  bool _isInitialized = false;
+  bool _isCapturingImages = false;
+
   @override
   void initState() {
     super.initState();
     if (widget.interactive) {
       _focusNode.requestFocus();
     }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _captureNodeImages();
+      if (mounted) {
+        _initializeCanvas();
+      }
+    });
+  }
+
+  void _initializeCanvas() async {
+    if (!mounted) return;
+
+    final controller = ref.read(flowControllerProvider);
+    controller.setInteractiveViewerKey(_interactiveViewerKey);
+
+    widget.onCanvasInit?.call(controller);
+
+    // Mark as initialized to show nodes
+    setState(() {
+      _isInitialized = true;
+    });
+
+    // OPTIMIZATION 3: Delay image capture to avoid initial jank
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _scheduleImageCapture();
+      }
+    });
+  }
+
+  void _scheduleImageCapture() {
+    if (_isCapturingImages) return;
+
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      if (mounted && !_isCapturingImages) {
+        _captureNodeImagesWithThrottle();
+      }
     });
   }
 
   @override
   void didUpdateWidget(covariant FlowCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!_isInitialized) return;
+
     final controller = ref.read(flowControllerProvider);
     if (controller.nodes.any((n) => n.needsRepaint)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _captureNodeImages());
+      _scheduleImageCapture();
     }
   }
 
@@ -63,7 +106,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   bool _pendingNodeKeysUpdate = false;
 
   void _scheduleUpdateNodeKeys(FlowCanvasController controller) {
-    if (_pendingNodeKeysUpdate) return;
+    if (_pendingNodeKeysUpdate || !_isInitialized) return;
     _pendingNodeKeysUpdate = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -86,42 +129,60 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       ..addAll(newKeys);
   }
 
-  void _captureNodeImages() async {
-    if (!mounted || _nodeKeys.isEmpty) return;
+  void _captureNodeImagesWithThrottle() async {
+    if (!mounted || _nodeKeys.isEmpty || _isCapturingImages) return;
 
-    final controller = ref.read(flowControllerProvider);
-    final nodesToRepaint =
-        controller.nodes.where((n) => n.needsRepaint).toList();
-    if (nodesToRepaint.isEmpty) return;
+    _isCapturingImages = true;
 
-    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    try {
+      final controller = ref.read(flowControllerProvider);
+      final nodesToCapture =
+          controller.nodes.where((n) => n.needsRepaint).toList();
 
-    // 1. Create a list of futures. Each future will eventually return a tuple or null.
-    final futures = _nodeKeys.entries.map((entry) async {
-      final nodeId = entry.key;
-      final boundary = entry.value.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary != null) {
-        final image = await boundary.toImage(pixelRatio: pixelRatio);
-        return (nodeId, image); // This is a Future<(String, ui.Image)>
+      if (nodesToCapture.isEmpty) {
+        _isCapturingImages = false;
+        return;
       }
-      return null; // This is a Future<null>
-    }).toList(); // Convert to a list to pass to Future.wait
 
-    // 2. Await all the futures to complete in parallel.
-    // The result is a list of the resolved values (tuples or nulls).
-    final results = await Future.wait(futures);
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
 
-    if (!mounted) return;
+      // OPTIMIZATION 6: Process images in smaller batches to avoid frame drops
+      const batchSize = 3; // Process 3 nodes at a time
+      for (int i = 0; i < nodesToCapture.length; i += batchSize) {
+        final batch = nodesToCapture.skip(i).take(batchSize);
 
-    // 3. Now, process the results.
-    // We iterate through the list of captured images and update the controller.
-    for (final result in results) {
-      if (result != null) {
-        // The 'result' is the (String, ui.Image) tuple.
-        final (nodeId, image) = result;
-        controller.nodeManager.updateNodeImage(nodeId, image);
+        final futures = batch.map((node) async {
+          final key = _nodeKeys[node.id];
+          if (key == null) return null;
+
+          final boundary =
+              key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+          if (boundary != null) {
+            final image = await boundary.toImage(pixelRatio: pixelRatio);
+            return (node.id, image);
+          }
+          return null;
+        }).toList();
+
+        final results = await Future.wait(futures);
+
+        if (!mounted) break;
+
+        // Update controller with batch results
+        for (final result in results) {
+          if (result != null) {
+            final (nodeId, image) = result;
+            controller.nodeManager.updateNodeImage(nodeId, image);
+          }
+        }
+
+        // OPTIMIZATION 7: Yield between batches to prevent blocking the UI thread
+        if (i + batchSize < nodesToCapture.length) {
+          await Future.delayed(const Duration(milliseconds: 1));
+        }
       }
+    } finally {
+      _isCapturingImages = false;
     }
   }
 
@@ -135,16 +196,19 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     required bool isInteractive,
     required bool isForCapture,
   }) {
+    // Correctly get the widget from the controller, which uses the node registry.
     final Widget? nodeWidget = controller.getNodeWidget(node);
 
+    // If the node type isn't registered, getNodeWidget will return null.
     if (nodeWidget == null) {
-      return _buildMissingNodeWidget(node);
+      // You could also return a default error widget here for debugging.
+      return const SizedBox.shrink();
     }
 
+    // Create a mutable variable that can be wrapped by other widgets.
     Widget finalWidget = nodeWidget;
 
-    // Wrap in RepaintBoundary for image capture
-    if (isForCapture) {
+    if (isForCapture && _nodeKeys.containsKey(node.id)) {
       finalWidget = RepaintBoundary(
         key: _nodeKeys[node.id],
         child: Material(
@@ -154,91 +218,19 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       );
     }
 
-    // SMART INTERACTION HANDLING
     if (isInteractive) {
-      // Only add canvas-level interactions if node doesn't handle them
-      if (!node.hasCustomInteractions) {
-        finalWidget = _wrapWithCanvasInteractions(
-          child: finalWidget,
-          node: node,
-          controller: controller,
-        );
-      }
-      // If node has custom interactions, let it handle everything
+      finalWidget = GestureDetector(
+        onTap: () => controller.selectionManager.selectNode(node.id),
+        onPanUpdate: (details) =>
+            controller.nodeManager.dragNode(node.id, details.delta),
+        child: finalWidget,
+      );
     }
 
     return Positioned(
       left: node.position.dx,
       top: node.position.dy,
       child: finalWidget,
-    );
-  }
-
-  Widget _wrapWithCanvasInteractions({
-    required Widget child,
-    required FlowNode node,
-    required FlowCanvasController controller,
-  }) {
-    return GestureDetector(
-      // SELECTION HANDLING
-      onTap: node.isSelectable
-          ? () => controller.selectionManager.selectNode(node.id)
-          : null,
-
-      // DRAG HANDLING
-      onPanStart: node.isDraggable
-          ? (details) {
-              controller.interactionHandler.onNodeDragStart(node.id, details);
-            }
-          : null,
-
-      onPanUpdate: node.isDraggable
-          ? (details) {
-              controller.interactionHandler.onNodeDragUpdate(node.id, details);
-            }
-          : null,
-
-      onPanEnd: node.isDraggable
-          ? (details) {
-              controller.interactionHandler.onNodeDragEnd(node.id, details);
-            }
-          : null,
-
-      child: child,
-    );
-  }
-
-  Widget _buildMissingNodeWidget(FlowNode node) {
-    return Positioned(
-      left: node.position.dx,
-      top: node.position.dy,
-      child: Container(
-        width: node.size.width,
-        height: node.size.height,
-        decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.3),
-          border: Border.all(color: Colors.red, width: 2),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error, color: Colors.red, size: 24),
-              const SizedBox(height: 4),
-              Text(
-                'Unknown type:\n${node.type}',
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -264,6 +256,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
             }
           : null,
       child: InteractiveViewer(
+        key: _interactiveViewerKey,
         transformationController: controller.transformationController,
         constrained: false,
         boundaryMargin: const EdgeInsets.all(0),
@@ -292,34 +285,45 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
               ),
 
               // VISIBLE NODES LAYER
-              ...controller.nodes.map(
-                (node) {
-                  return _buildNode(
-                      controller: controller,
-                      node: node,
-                      isInteractive: isPanningEnabled,
-                      isForCapture: false);
-                },
-              ),
-
-              // Offstage stack for rendering nodes to images (for caching)
-              Offstage(
-                offstage: true,
-                child: Stack(
-                  children: [
-                    ...controller.nodes.where((n) => n.needsRepaint).map(
-                      (node) {
-                        return _buildNode(
-                            controller: controller,
-                            node: node,
-                            isInteractive: isPanningEnabled,
-                            isForCapture: true);
-                      },
-                    ),
-                  ],
+              if (_isInitialized) ...[
+                // Visible nodes
+                ...controller.nodes.map(
+                  (node) => _buildNode(
+                    controller: controller,
+                    node: node,
+                    isInteractive: isPanningEnabled,
+                    isForCapture: false,
+                  ),
                 ),
-              ),
+
+                if (_nodeKeys.isNotEmpty)
+                  Offstage(
+                    offstage: true,
+                    child: Stack(
+                      children: [
+                        ...controller.nodes.where((n) => n.needsRepaint).map(
+                          (node) {
+                            return _buildNode(
+                                controller: controller,
+                                node: node,
+                                isInteractive: isPanningEnabled,
+                                isForCapture: true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+              ] else ...[
+                const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ],
             ],
+            // Offstage stack for rendering nodes to images (for caching)
           ),
         ),
       ),
@@ -355,7 +359,10 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   @override
   Widget build(BuildContext context) {
     final controller = ref.watch(flowControllerProvider);
-    _scheduleUpdateNodeKeys(controller);
+
+    if (_isInitialized) {
+      _scheduleUpdateNodeKeys(controller);
+    }
 
     return Container(
       color: widget.backgroundColor,
@@ -365,7 +372,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
             _buildInteractiveCanvas(controller)
           else
             _buildStaticCanvas(controller),
-          if (widget.showControls)
+          if (widget.showControls && _isInitialized)
             const FlowCanvasControls(
               alignment: ControlPanelAlignment.bottomLeft,
               orientation: Axis.vertical,

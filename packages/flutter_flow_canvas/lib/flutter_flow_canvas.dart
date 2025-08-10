@@ -7,6 +7,7 @@ export 'src/core/enums.dart';
 export 'src/core/models/node.dart';
 export 'src/core/models/edge.dart';
 export 'src/core/models/connection_state.dart';
+export 'src/core/models/edge_painter.dart';
 
 // UI widgets
 export 'src/ui/widgets/flow_canvas.dart';
@@ -22,3 +23,4 @@ export 'src/ui/widgets/painters/background_painter.dart' show BackgroundVariant;
 
 // Registrory
 export 'src/core/state/node_registry.dart';
+export 'src/core/state/edge_registry.dart';

@@ -12,23 +12,11 @@ typedef IsValidConnectionCallback = bool Function(
 
 /// A React Flow style connection handle that can be placed on nodes.
 class Handle extends ConsumerStatefulWidget {
-  /// The ID of the node this handle belongs to.
   final String nodeId;
-
-  /// Unique ID for this handle within the node.
   final String id;
-
-  /// positioning is required.
   final HandlePosition? position;
-
-  /// The type of handle, determining if it can be a source or a target.
   final HandleType type;
-
-  /// The size (width and height) of the handle widget.
   final double size;
-
-  /// A custom widget to display inside the handle. If null, a default
-  /// React Flow style representation is used.
   final Widget? child;
 
   /// Custom colors for the handle states
@@ -39,25 +27,15 @@ class Handle extends ConsumerStatefulWidget {
 
   /// A master switch to enable or disable all connections for this handle.
   final bool isConnectable;
-
-  /// Determines if a new connection can be dragged FROM this handle.
-  /// Only applies if `type` is `HandleType.source`.
   final bool isConnectableStart;
-
-  /// Determines if a connection can be dropped ONTO this handle.
-  /// Only applies if `type` is `HandleType.target`.
   final bool isConnectableEnd;
 
   /// Enables or disables all hover and connection animations for performance
   /// or stylistic reasons.
   final bool enableAnimations;
-
-  /// A custom callback to validate a connection attempt. If it returns false,
-  /// the connection will be disallowed.
   final IsValidConnectionCallback? onValidateConnection;
 
   /// A callback fired when a connection is successfully made involving this
-  /// handle.
   final VoidCallback? onConnect;
 
   const Handle({
@@ -93,7 +71,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   late Animation<double> _scaleAnimation;
   late Animation<double> _pulseAnimation;
 
-  FlowCanvasController get controller => ref.read(flowControllerProvider);
+  late final FlowCanvasController controller;
 
   String? _registeredNodeId;
   String? _registeredHandleId;
@@ -101,6 +79,8 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+
+    controller = ref.read(flowControllerProvider);
 
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 200),

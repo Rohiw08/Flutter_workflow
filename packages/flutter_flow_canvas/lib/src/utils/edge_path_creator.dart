@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../core/models/edge.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
 
 class EdgePathCreator {
-  static Path createPath(EdgeType type, Offset start, Offset end) {
+  static Path createPath(EdgePathType type, Offset start, Offset end) {
     switch (type) {
-      case EdgeType.bezier:
+      case EdgePathType.bezier:
         return _createBezierPath(start, end);
-      case EdgeType.step:
+      case EdgePathType.step:
         return _createStepPath(start, end);
-      case EdgeType.straight:
+      case EdgePathType.straight:
         return _createStraightPath(start, end);
     }
   }

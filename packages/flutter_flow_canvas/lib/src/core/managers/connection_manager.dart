@@ -23,6 +23,7 @@ class ConnectionManager {
   void registerHandle(
       String nodeId, String handleId, GlobalKey<HandleState> key) {
     _state.handleRegistry['$nodeId/$handleId'] = key;
+    _notify();
   }
 
   /// Unregister a handle
