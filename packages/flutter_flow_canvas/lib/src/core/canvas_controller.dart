@@ -32,6 +32,15 @@ class FlowCanvasController extends ChangeNotifier {
   late final InteractionHandler interactionHandler;
   late final KeyboardHandler keyboardHandler;
 
+  // Registries
+  final NodeRegistry nodeRegistry;
+  final EdgeRegistry edgeRegistry;
+
+  GlobalKey? interactiveViewerKey;
+
+  // Fixed: Track disposal state to prevent double disposal
+  bool _isDisposed = false;
+
   // Public Getters from State
   List<FlowNode> get nodes => List.unmodifiable(_state.nodes);
   List<FlowEdge> get edges => List.unmodifiable(_state.edges);
@@ -39,15 +48,8 @@ class FlowCanvasController extends ChangeNotifier {
   Rect? get selectionRect => _state.selectionRect;
   double get zoomLevel => transformationController.value.getMaxScaleOnAxis();
   DragMode get dragMode => _state.dragMode;
-
   double get canvasWidth => _state.canvasWidth;
   double get canvasHeight => _state.canvasHeight;
-
-  // Registory
-  final NodeRegistry nodeRegistry;
-  final EdgeRegistry edgeRegistry;
-
-  GlobalKey? interactiveViewerKey;
 
   FlowCanvasController({
     bool enableMultiSelection = true,
@@ -58,6 +60,11 @@ class FlowCanvasController extends ChangeNotifier {
     required this.nodeRegistry,
     required this.edgeRegistry,
   }) {
+    // Fixed: Validate canvas dimensions
+    if (canvasWidth <= 0 || canvasHeight <= 0) {
+      throw ArgumentError('Canvas dimensions must be positive');
+    }
+
     _state.enableMultiSelection = enableMultiSelection;
     _state.enableKeyboardShortcuts = enableKeyboardShortcuts;
     _state.enableBoxSelection = enableBoxSelection;
@@ -65,63 +72,30 @@ class FlowCanvasController extends ChangeNotifier {
     _state.canvasHeight = canvasHeight;
 
     // Initialize managers and handlers
-    void notify() => notifyListeners();
-    nodeManager = NodeManager(_state, notify, nodeRegistry);
-    edgeManager = EdgeManager(_state, notify);
-    selectionManager = SelectionManager(_state, notify);
-    connectionManager = ConnectionManager(_state, notify, edgeManager);
-    navigationManager =
-        NavigationManager(_state, transformationController, notify);
-    interactionHandler = InteractionHandler(_state, transformationController,
-        notify, selectionManager, nodeManager, navigationManager);
-    keyboardHandler = KeyboardHandler(
-        _state, selectionManager, nodeManager, connectionManager);
+    void notify() {
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+    }
 
-    transformationController.addListener(notify);
+    try {
+      nodeManager = NodeManager(_state, notify, nodeRegistry);
+      edgeManager = EdgeManager(_state, notify);
+      selectionManager = SelectionManager(_state, notify);
+      connectionManager = ConnectionManager(_state, notify, edgeManager);
+      navigationManager =
+          NavigationManager(_state, transformationController, notify);
+      interactionHandler = InteractionHandler(_state, transformationController,
+          notify, selectionManager, nodeManager, navigationManager);
+      keyboardHandler = KeyboardHandler(
+          _state, selectionManager, nodeManager, connectionManager);
+
+      transformationController.addListener(notify);
+    } catch (e) {
+      debugPrint('Error initializing FlowCanvasController: $e');
+      rethrow;
+    }
   }
-
-  // void debugEdgeRendering() {
-  //   print('=== CONTROLLER DEBUG ===');
-  //   print('Number of nodes: ${nodes.length}');
-  //   print('Number of edges: ${edges.length}');
-  //   print('InteractiveViewer key set: ${interactiveViewerKey != null}');
-  //   print(
-  //       'InteractiveViewer context exists: ${interactiveViewerKey?.currentContext != null}');
-
-  //   // Debug each edge
-  //   for (int i = 0; i < edges.length; i++) {
-  //     final edge = edges[i];
-  //     print(
-  //         '\nEdge $i: ${edge.sourceNodeId}/${edge.sourceHandleId} -> ${edge.targetNodeId}/${edge.targetHandleId}');
-
-  //     // Check if source and target nodes exist
-  //     final sourceNode =
-  //         nodes.where((n) => n.id == edge.sourceNodeId).firstOrNull;
-  //     final targetNode =
-  //         nodes.where((n) => n.id == edge.targetNodeId).firstOrNull;
-
-  //     print('  Source node exists: ${sourceNode != null}');
-  //     print('  Target node exists: ${targetNode != null}');
-
-  //     if (sourceNode != null) {
-  //       print('  Source node position: ${sourceNode.position}');
-  //     }
-  //     if (targetNode != null) {
-  //       print('  Target node position: ${targetNode.position}');
-  //     }
-
-  //     // Test handle positions
-  //     final sourceHandlePos = connectionManager.getHandleGlobalPosition(
-  //         edge.sourceNodeId, edge.sourceHandleId);
-  //     final targetHandlePos = connectionManager.getHandleGlobalPosition(
-  //         edge.targetNodeId, edge.targetHandleId);
-
-  //     print('  Source handle global pos: $sourceHandlePos');
-  //     print('  Target handle global pos: $targetHandlePos');
-  //   }
-
-  //   print('=== END CONTROLLER DEBUG ===');
-  // }
 
   void setInteractiveViewerKey(GlobalKey key) {
     interactiveViewerKey = key;
@@ -129,26 +103,106 @@ class FlowCanvasController extends ChangeNotifier {
 
   // Utility methods
   Widget? getNodeWidget(FlowNode node) {
-    return nodeRegistry.buildNodeWidget(node);
+    try {
+      return nodeRegistry.buildNodeWidget(node);
+    } catch (e) {
+      debugPrint('Error building widget for node ${node.id}: $e');
+      return null;
+    }
   }
 
   /// This is useful for features like a minimap or fitting the view.
   Rect getNodesBounds() {
     if (_state.nodes.isEmpty) return Rect.zero;
-    return _state.nodes
-        .map((n) => n.rect)
-        .reduce((value, element) => value.expandToInclude(element));
+
+    try {
+      return _state.nodes
+          .map((n) => n.rect)
+          .reduce((value, element) => value.expandToInclude(element));
+    } catch (e) {
+      debugPrint('Error calculating nodes bounds: $e');
+      return Rect.zero;
+    }
   }
 
   void clear() {
-    _state.clear();
-    notifyListeners();
+    if (_isDisposed) return;
+
+    try {
+      _state.clear();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error clearing canvas: $e');
+    }
+  }
+
+  /// Validates the current state and fixes common issues
+  void validateAndFixState() {
+    if (_isDisposed) return;
+
+    try {
+      // Validate transformation matrix
+      navigationManager.validateAndFixTransformation();
+
+      // Validate handle registry
+      connectionManager.validateHandleRegistry();
+
+      // Remove any orphaned edges (edges with non-existent nodes)
+      final nodeIds = _state.nodes.map((n) => n.id).toSet();
+      final edgesToRemove = <FlowEdge>[];
+
+      for (final edge in _state.edges) {
+        if (!nodeIds.contains(edge.sourceNodeId) ||
+            !nodeIds.contains(edge.targetNodeId)) {
+          edgesToRemove.add(edge);
+        }
+      }
+
+      for (final edge in edgesToRemove) {
+        edgeManager.removeEdge(edge.id);
+      }
+
+      // Remove invalid selected nodes
+      final validSelectedNodes =
+          _state.selectedNodes.where((id) => nodeIds.contains(id)).toSet();
+
+      if (validSelectedNodes.length != _state.selectedNodes.length) {
+        _state.selectedNodes.clear();
+        _state.selectedNodes.addAll(validSelectedNodes);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error validating canvas state: $e');
+    }
   }
 
   @override
   void dispose() {
-    transformationController.removeListener(notifyListeners);
-    transformationController.dispose();
-    super.dispose();
+    if (_isDisposed) return;
+
+    _isDisposed = true;
+
+    try {
+      // Fixed: Properly dispose all resources in correct order
+
+      // 1. Remove transformation listener first
+      transformationController.removeListener(notifyListeners);
+
+      // 2. Cancel any ongoing connections
+      connectionManager.cancelConnection();
+
+      // 3. Clear state to remove references
+      _state.clear();
+
+      // 4. Dispose transformation controller
+      transformationController.dispose();
+
+      // 5. Call super.dispose() last
+      super.dispose();
+    } catch (e) {
+      debugPrint('Error disposing FlowCanvasController: $e');
+      // Still call super.dispose() even if there's an error
+      super.dispose();
+    }
   }
 }

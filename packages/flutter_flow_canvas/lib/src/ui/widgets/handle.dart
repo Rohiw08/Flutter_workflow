@@ -44,7 +44,7 @@ class Handle extends ConsumerStatefulWidget {
     required this.id,
     this.position,
     this.type = HandleType.source,
-    this.size = 10.0, // A slightly larger default for better touch interaction
+    this.size = 10.0,
     this.child,
     this.idleColor,
     this.hoverColor,
@@ -63,7 +63,8 @@ class Handle extends ConsumerStatefulWidget {
 }
 
 class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
-  final GlobalKey<HandleState> _key = GlobalKey<HandleState>();
+  // Fixed: Generate unique GlobalKey for each handle instance
+  late final GlobalKey<HandleState> _key;
   bool _isHovered = false;
   bool _isConnecting = false;
   late AnimationController _scaleController;
@@ -79,6 +80,9 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+
+    // Fixed: Create unique GlobalKey for each handle instance
+    _key = GlobalKey<HandleState>();
 
     controller = ref.read(flowControllerProvider);
 
@@ -108,15 +112,19 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _registerHandle();
+      // Fixed: Add mounted check before registration
+      if (mounted) {
+        _registerHandle();
+      }
     });
   }
 
   @override
   void dispose() {
+    // Fixed: Unregister first, then dispose controllers to prevent animation issues
+    _unregisterHandle();
     _scaleController.dispose();
     _pulseController.dispose();
-    _unregisterHandle();
     super.dispose();
   }
 
@@ -126,7 +134,10 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     if (oldWidget.nodeId != widget.nodeId || oldWidget.id != widget.id) {
       _unregisterHandle();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _registerHandle();
+        // Fixed: Add mounted check in callback
+        if (mounted) {
+          _registerHandle();
+        }
       });
     }
   }
@@ -156,29 +167,37 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
       return;
     }
 
+    // Fixed: Check if still mounted before starting connection
+    if (!mounted) return;
+
     controller.connectionManager.startConnection(
       widget.nodeId,
       widget.id,
       details.globalPosition,
     );
-    setState(() => _isConnecting = true);
-    if (widget.enableAnimations) {
-      _scaleController.forward();
-      _pulseController.repeat();
+
+    if (mounted) {
+      setState(() => _isConnecting = true);
+      if (widget.enableAnimations) {
+        _scaleController.forward();
+        _pulseController.repeat();
+      }
     }
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (!_isConnecting) return;
+    if (!_isConnecting || !mounted) return;
 
     controller.connectionManager.endConnection();
 
-    setState(() => _isConnecting = false);
-    if (widget.enableAnimations) {
-      _pulseController.stop();
-      _pulseController.reset();
-      if (!_isHovered) {
-        _scaleController.reverse();
+    if (mounted) {
+      setState(() => _isConnecting = false);
+      if (widget.enableAnimations) {
+        _pulseController.stop();
+        _pulseController.reset();
+        if (!_isHovered) {
+          _scaleController.reverse();
+        }
       }
     }
   }
@@ -219,20 +238,17 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
-  // =========================================================================
-  // KEY CHANGE: The offset logic is inverted to pull the handle inward.
-  // =========================================================================
   Offset _getOffset() {
     final double offset = widget.size / 2;
     switch (widget.position) {
       case HandlePosition.top:
-        return Offset(0, offset); // Move DOWN to bring it onto the edge
+        return Offset(0, offset - 17);
       case HandlePosition.right:
-        return Offset(-offset, 0); // Move LEFT to bring it onto the edge
+        return Offset(-offset + 17, 0);
       case HandlePosition.bottom:
-        return Offset(0, -offset); // Move UP to bring it onto the edge
+        return Offset(0, -offset + 17);
       case HandlePosition.left:
-        return Offset(offset, 0); // Move RIGHT to bring it onto the edge
+        return Offset(offset - 17, 0);
       default:
         return Offset.zero;
     }
@@ -262,8 +278,9 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: handleColor
-                        .withOpacity(0.3 * (1 - _pulseAnimation.value)),
+                    color: handleColor.withOpacity(
+                      0.3 * (1 - _pulseAnimation.value),
+                    ),
                     width: 1.0,
                   ),
                 ),
@@ -306,15 +323,19 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final handleWidget = MouseRegion(
       onEnter: (_) {
-        setState(() => _isHovered = true);
-        if (widget.enableAnimations) {
-          _scaleController.forward();
+        if (mounted) {
+          setState(() => _isHovered = true);
+          if (widget.enableAnimations) {
+            _scaleController.forward();
+          }
         }
       },
       onExit: (_) {
-        setState(() => _isHovered = false);
-        if (widget.enableAnimations && !_isConnecting) {
-          _scaleController.reverse();
+        if (mounted) {
+          setState(() => _isHovered = false);
+          if (widget.enableAnimations && !_isConnecting) {
+            _scaleController.reverse();
+          }
         }
       },
       cursor: widget.isConnectable
@@ -329,7 +350,6 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
             return Transform.scale(
               key: _key,
               scale: widget.enableAnimations ? _scaleAnimation.value : 1.0,
-              // Use a larger SizedBox for an increased gesture detection area
               child: SizedBox(
                 width: widget.size * 2.5,
                 height: widget.size * 2.5,
