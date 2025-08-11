@@ -8,67 +8,99 @@ class TextNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final title = node.data['title'] as String? ?? 'Text Node';
+    final description = node.data['description'] as String? ?? '';
+
+    return SizedBox(
       width: node.size.width,
       height: node.size.height,
-      decoration: BoxDecoration(
-        color: node.isSelected
-            ? Colors.lightBlue.shade100
-            : Colors.lightBlue.shade50,
-        border: Border.all(
-          color: node.isSelected ? Colors.blue : Colors.blueAccent,
-          width: node.isSelected ? 3 : 2,
-        ),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: node.isSelected
-            ? [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
       child: Stack(
         children: [
-          // Main content
-          Padding(
-            padding: const EdgeInsets.all(8),
+          // Main node content
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:
+                  node.isSelected ? Colors.blue.shade100 : Colors.blue.shade50,
+              border: Border.all(
+                color: node.isSelected
+                    ? Colors.blue.shade700
+                    : Colors.blue.shade300,
+                width: node.isSelected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  node.data['title'] ?? 'Title',
-                  style: const TextStyle(
-                    fontSize: 18,
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Text(
-                    node.data['description'] ?? 'Description goes here...',
-                    style: const TextStyle(fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 3,
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade600,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
-          // Connection handles
+
+          // IMPORTANT: Add Handle widgets
+          // These are what create the connection points!
+
+          // Left handle (input)
           Handle(
-            nodeId: node.id, // This should be dynamic
-            id: 'input',
+            nodeId: node.id,
+            id: 'left',
             position: HandlePosition.left,
             type: HandleType.target,
+            size: 10.0,
           ),
+
+          // Right handle (output)
           Handle(
-            nodeId: node.id, // This should be dynamic
-            id: 'output',
+            nodeId: node.id,
+            id: 'right',
             position: HandlePosition.right,
             type: HandleType.source,
+            size: 10.0,
+          ),
+
+          // Top handle (input)
+          Handle(
+            nodeId: node.id,
+            id: 'top',
+            position: HandlePosition.top,
+            type: HandleType.target,
+            size: 10.0,
+          ),
+
+          // Bottom handle (output)
+          Handle(
+            nodeId: node.id,
+            id: 'bottom',
+            position: HandlePosition.bottom,
+            type: HandleType.source,
+            size: 10.0,
           ),
         ],
       ),

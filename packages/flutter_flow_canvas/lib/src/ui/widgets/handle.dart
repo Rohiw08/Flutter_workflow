@@ -44,7 +44,7 @@ class Handle extends ConsumerStatefulWidget {
     required this.id,
     this.position,
     this.type = HandleType.source,
-    this.size = 8.0, // Smaller default size like React Flow
+    this.size = 10.0, // A slightly larger default for better touch interaction
     this.child,
     this.idleColor,
     this.hoverColor,
@@ -123,8 +123,6 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(Handle oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Handle ID or node ID changed, re-register
     if (oldWidget.nodeId != widget.nodeId || oldWidget.id != widget.id) {
       _unregisterHandle();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -221,17 +219,20 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
+  // =========================================================================
+  // KEY CHANGE: The offset logic is inverted to pull the handle inward.
+  // =========================================================================
   Offset _getOffset() {
     final double offset = widget.size / 2;
     switch (widget.position) {
       case HandlePosition.top:
-        return Offset(0, -offset);
+        return Offset(0, offset); // Move DOWN to bring it onto the edge
       case HandlePosition.right:
-        return Offset(offset, 0);
+        return Offset(-offset, 0); // Move LEFT to bring it onto the edge
       case HandlePosition.bottom:
-        return Offset(0, offset);
+        return Offset(0, -offset); // Move UP to bring it onto the edge
       case HandlePosition.left:
-        return Offset(-offset, 0);
+        return Offset(offset, 0); // Move RIGHT to bring it onto the edge
       default:
         return Offset.zero;
     }
@@ -297,15 +298,6 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
             ],
           ),
         ),
-        if (widget.type == HandleType.source || _isConnecting)
-          Container(
-            width: widget.size * 0.4,
-            height: widget.size * 0.4,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-            ),
-          ),
       ],
     );
   }
@@ -337,8 +329,9 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
             return Transform.scale(
               key: _key,
               scale: widget.enableAnimations ? _scaleAnimation.value : 1.0,
+              // Use a larger SizedBox for an increased gesture detection area
               child: SizedBox(
-                width: widget.size * 2.5, // Larger hit area
+                width: widget.size * 2.5,
                 height: widget.size * 2.5,
                 child: Center(
                   child: widget.child ?? _buildReactFlowHandle(),

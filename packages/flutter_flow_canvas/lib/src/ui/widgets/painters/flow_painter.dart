@@ -22,24 +22,50 @@ class FlowPainter extends CustomPainter {
   FlowPainter({required this.controller}) : super(repaint: controller);
 
   Offset? _getHandlePosition(String nodeId, String handleId) {
+    // final handleKey = '$nodeId/$handleId';
+    // print('=== HANDLE POSITION DEBUG for $handleKey ===');
+
+    // Step 1: Check if handle is registered - use the connectionManager method
     final handleGlobalPos =
         controller.connectionManager.getHandleGlobalPosition(nodeId, handleId);
-    final ivKey = controller.interactiveViewerKey;
-
-    if (handleGlobalPos != null && ivKey?.currentContext != null) {
-      final ivRenderBox =
-          ivKey?.currentContext!.findRenderObject() as RenderBox;
-
-      // Get the top-left position of the InteractiveViewer on the screen
-      final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
-
-      // Subtract the InteractiveViewer's position to get the handle's position relative to the viewport
-      final handleViewportPos = handleGlobalPos - ivGlobalPos;
-
-      // Now, convert the viewport-local position to a scene-local position
-      return controller.transformationController.toScene(handleViewportPos);
+    // print('1. Handle global position from connectionManager: $handleGlobalPos');
+    if (handleGlobalPos == null) {
+      // print('   Handle not found or has no valid context/renderbox');
+      return null;
     }
-    return null;
+
+    // Step 2: Check InteractiveViewer key
+    final ivKey = controller.interactiveViewerKey;
+    // print('2. InteractiveViewer key exists: ${ivKey != null}');
+    // print(
+    //     '   InteractiveViewer context exists: ${ivKey?.currentContext != null}');
+
+    if (ivKey?.currentContext == null) {
+      // print('   ERROR: InteractiveViewer context is null!');
+      return null;
+    }
+
+    // Step 3: Get InteractiveViewer position
+    final ivRenderBox = ivKey!.currentContext!.findRenderObject() as RenderBox?;
+    // print('3. InteractiveViewer RenderBox found: ${ivRenderBox != null}');
+    if (ivRenderBox == null) {
+      return null;
+    }
+
+    final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
+    // print('   InteractiveViewer global position: $ivGlobalPos');
+
+    // Step 4: Calculate relative position
+    final handleViewportPos = handleGlobalPos - ivGlobalPos;
+    // print('4. Handle viewport position: $handleViewportPos');
+
+    // Step 5: Transform to scene coordinates
+    final scenePos =
+        controller.transformationController.toScene(handleViewportPos);
+    // print('5. Final scene position: $scenePos');
+
+    // print('=== END HANDLE POSITION DEBUG ===');
+    return scenePos;
   }
 
   @override
@@ -85,13 +111,24 @@ class FlowPainter extends CustomPainter {
   }
 
   void _drawEdges(Canvas canvas, Rect canvasRect) {
-    for (final edge in controller.edges) {
+    // print('=== ENHANCED EDGE DEBUG ===');
+    // Call this in your _drawEdges method
+    // controller.connectionManager.debugHandleRegistration();
+    // Use the controller's debug method instead of accessing private fields
+    // controller.debugEdgeRendering();
+
+    for (int i = 0; i < controller.edges.length; i++) {
+      final edge = controller.edges[i];
+      // print(
+      //     '\n--- Drawing Edge $i: ${edge.sourceNodeId}/${edge.sourceHandleId} -> ${edge.targetNodeId}/${edge.targetHandleId} ---');
+
+      // This will now print detailed debug info for each handle
       final start = _getHandlePosition(edge.sourceNodeId, edge.sourceHandleId);
       final end = _getHandlePosition(edge.targetNodeId, edge.targetHandleId);
 
       if (start != null && end != null) {
-        final edgeRect = Rect.fromPoints(start, end);
-        if (!canvasRect.overlaps(edgeRect.inflate(50))) continue;
+        // final edgeRect = Rect.fromPoints(start, end);
+        // print('SUCCESS: Will draw edge from $start to $end');
 
         final isSelected =
             controller.selectedNodes.contains(edge.sourceNodeId) ||
@@ -99,24 +136,22 @@ class FlowPainter extends CustomPainter {
         final paint =
             edge.paint ?? (isSelected ? _selectedEdgePaint : _edgePaint);
 
-        // --- REFINED LOGIC ---
-        // 1. Always create the base path first.
         final path = EdgePathCreator.createPath(edge.pathType, start, end);
 
-        // 2. Look for a custom painter in the registry.
         final customPainter =
             controller.edgeRegistry.getPainter(edge.type ?? '');
 
         if (customPainter != null) {
-          // 3. If found, pass the canvas and the path to it.
           customPainter.paint(canvas, path, edge, paint);
         } else {
-          // 4. Otherwise, use the default drawing logic.
           canvas.drawPath(path, paint);
           _drawArrowHead(canvas, start, end, paint);
         }
+      } else {
+        // print('FAILED: start=$start, end=$end');
       }
     }
+    // print('=== END ENHANCED EDGE DEBUG ===\n');
   }
 
   void _drawArrowHead(Canvas canvas, Offset start, Offset end, Paint paint) {

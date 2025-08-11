@@ -80,6 +80,49 @@ class FlowCanvasController extends ChangeNotifier {
     transformationController.addListener(notify);
   }
 
+  // void debugEdgeRendering() {
+  //   print('=== CONTROLLER DEBUG ===');
+  //   print('Number of nodes: ${nodes.length}');
+  //   print('Number of edges: ${edges.length}');
+  //   print('InteractiveViewer key set: ${interactiveViewerKey != null}');
+  //   print(
+  //       'InteractiveViewer context exists: ${interactiveViewerKey?.currentContext != null}');
+
+  //   // Debug each edge
+  //   for (int i = 0; i < edges.length; i++) {
+  //     final edge = edges[i];
+  //     print(
+  //         '\nEdge $i: ${edge.sourceNodeId}/${edge.sourceHandleId} -> ${edge.targetNodeId}/${edge.targetHandleId}');
+
+  //     // Check if source and target nodes exist
+  //     final sourceNode =
+  //         nodes.where((n) => n.id == edge.sourceNodeId).firstOrNull;
+  //     final targetNode =
+  //         nodes.where((n) => n.id == edge.targetNodeId).firstOrNull;
+
+  //     print('  Source node exists: ${sourceNode != null}');
+  //     print('  Target node exists: ${targetNode != null}');
+
+  //     if (sourceNode != null) {
+  //       print('  Source node position: ${sourceNode.position}');
+  //     }
+  //     if (targetNode != null) {
+  //       print('  Target node position: ${targetNode.position}');
+  //     }
+
+  //     // Test handle positions
+  //     final sourceHandlePos = connectionManager.getHandleGlobalPosition(
+  //         edge.sourceNodeId, edge.sourceHandleId);
+  //     final targetHandlePos = connectionManager.getHandleGlobalPosition(
+  //         edge.targetNodeId, edge.targetHandleId);
+
+  //     print('  Source handle global pos: $sourceHandlePos');
+  //     print('  Target handle global pos: $targetHandlePos');
+  //   }
+
+  //   print('=== END CONTROLLER DEBUG ===');
+  // }
+
   void setInteractiveViewerKey(GlobalKey key) {
     interactiveViewerKey = key;
   }

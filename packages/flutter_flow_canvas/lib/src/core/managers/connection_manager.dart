@@ -17,6 +17,93 @@ class ConnectionManager {
 
   FlowConnectionState? get connection => _state.connection;
 
+  // Add this debug method to ConnectionManager to see what's happening with handles
+//   void debugHandleRegistration() {
+//     print('=== HANDLE REGISTRATION DEBUG ===');
+//     print('Total registered handles: ${_state.handleRegistry.length}');
+//     print('Registered handle keys: ${_state.handleRegistry.keys.toList()}');
+
+//     for (final entry in _state.handleRegistry.entries) {
+//       final key = entry.key;
+//       final handleKey = entry.value;
+//       print('Handle "$key":');
+//       print('  - Key exists: ${handleKey != null}');
+//       print('  - Has context: ${handleKey.currentContext != null}');
+
+//       if (handleKey.currentContext != null) {
+//         final renderObject = handleKey.currentContext!.findRenderObject();
+//         print('  - Has RenderObject: ${renderObject != null}');
+//         if (renderObject != null && renderObject is RenderBox) {
+//           try {
+//             final globalPos =
+//                 (renderObject as RenderBox).localToGlobal(Offset.zero);
+//             print('  - Global position: $globalPos');
+//           } catch (e) {
+//             print('  - Error getting position: $e');
+//           }
+//         }
+//       }
+//     }
+//     print('=== END HANDLE REGISTRATION DEBUG ===');
+//   }
+
+//   // Add this method to ConnectionManager class
+//   void debugHandleRegistry() {
+//     print('=== HANDLE REGISTRY DEBUG ===');
+//     print('Total registered handles: ${_state.handleRegistry.length}');
+
+//     for (final entry in _state.handleRegistry.entries) {
+//       final handleKey = entry.key;
+//       final key = entry.value;
+//       final hasContext = key.currentContext != null;
+//       final hasRenderBox =
+//           hasContext ? (key.currentContext!.findRenderObject() != null) : false;
+
+//       print('Handle: $handleKey');
+//       print('  - Has context: $hasContext');
+//       print('  - Has RenderBox: $hasRenderBox');
+
+//       if (hasContext && hasRenderBox) {
+//         final renderBox = key.currentContext!.findRenderObject() as RenderBox;
+//         final size = renderBox.size;
+//         try {
+//           final globalPos =
+//               renderBox.localToGlobal(Offset(size.width / 2, size.height / 2));
+//           print('  - Global position: $globalPos');
+//           print('  - Size: $size');
+//         } catch (e) {
+//           print('  - Error getting position: $e');
+//         }
+//       }
+//     }
+
+//     print('Expected handles for edges:');
+//     for (final edge in _state.edges) {
+//       print('  - ${edge.sourceNodeId}/${edge.sourceHandleId}');
+//       print('  - ${edge.targetNodeId}/${edge.targetHandleId}');
+//     }
+//     print('=== END HANDLE REGISTRY DEBUG ===');
+//   }
+
+// // Also add this method to check InteractiveViewer
+//   void debugInteractiveViewer(GlobalKey? ivKey) {
+//     print('=== INTERACTIVE VIEWER DEBUG ===');
+//     print('Key exists: ${ivKey != null}');
+//     if (ivKey != null) {
+//       print('Context exists: ${ivKey.currentContext != null}');
+//       if (ivKey.currentContext != null) {
+//         final renderBox = ivKey.currentContext!.findRenderObject();
+//         print('RenderBox exists: ${renderBox != null}');
+//         if (renderBox != null) {
+//           final rb = renderBox as RenderBox;
+//           final globalPos = rb.localToGlobal(Offset.zero);
+//           print('InteractiveViewer global position: $globalPos');
+//           print('InteractiveViewer size: ${rb.size}');
+//         }
+//       }
+//     }
+//     print('=== END INTERACTIVE VIEWER DEBUG ===');
+//   }
   // === HANDLE MANAGEMENT ===
 
   /// Register a handle for connection detection
