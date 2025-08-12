@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_canvas/src/core/enums.dart';
-import 'package:flutter_flow_canvas/src/theme/canvas_theme.dart';
+import '/src/theme/theme.dart';
 
 class FlowCanvasThemes {
   /// Professional light theme with subtle colors
