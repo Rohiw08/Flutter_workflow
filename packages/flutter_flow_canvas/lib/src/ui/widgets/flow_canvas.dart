@@ -193,6 +193,15 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
               return null;
             }
 
+            // Add paint state validation before capture
+            if (renderBoundary.debugNeedsPaint) {
+              // Skip this node for now, it will be captured in the next frame
+              return null;
+            }
+            // Alternative: Add additional frame delay
+            await Future.delayed(
+                const Duration(milliseconds: 16)); // Wait one frame
+
             final image = await renderBoundary.toImage(pixelRatio: pixelRatio);
             return (node.id, image);
           } catch (e) {

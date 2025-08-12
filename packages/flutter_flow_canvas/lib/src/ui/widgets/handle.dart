@@ -238,6 +238,8 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
+  // TODO: Implement a more robust offset calculation based on position
+  /// Returns the offset for the handle based on its position.
   Offset _getOffset() {
     final double offset = widget.size / 2;
     switch (widget.position) {

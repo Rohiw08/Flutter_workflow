@@ -1,8 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-
-/// Defines the visual style of the canvas background.
-enum BackgroundVariant { lines, dots, cross }
+import 'package:flutter_flow_canvas/src/core/enums.dart';
 
 class BackgroundPainter extends CustomPainter {
   final Matrix4 matrix;
@@ -81,6 +79,9 @@ class BackgroundPainter extends CustomPainter {
     final visibleHeight = size.height - offsetY;
 
     switch (variant) {
+      case BackgroundVariant.none:
+        // No background
+        break;
       case BackgroundVariant.lines:
         _drawLines(canvas, visibleWidth, visibleHeight, effectiveGap, paint);
         break;

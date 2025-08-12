@@ -10,35 +10,32 @@ class EdgeRegistry {
   /// Registers a custom edge type with its painter.
   /// Fixed: Added validation and better error handling.
   void registerEdgeType(String type, EdgePainter painter) {
-    // Fixed: Validate input parameters
-    if (type.isEmpty) {
-      throw ArgumentError('Edge type cannot be empty');
+    if (type.trim().isEmpty) {
+      throw ArgumentError('Edge type cannot be empty or whitespace');
     }
-
-    if (_painters.containsKey(type)) {
-      debugPrint(
-          'Warning: Edge type "$type" is already registered. Overwriting.');
-    }
-
-    try {
-      _painters[type] = painter;
-      debugPrint('Successfully registered edge type: "$type"');
-    } catch (e) {
-      throw ArgumentError('Failed to register edge type "$type": $e');
-    }
+    _painters[type] = painter;
   }
 
-  /// Retrieves the painter for a given edge type.
-  /// Fixed: Added validation and safe retrieval.
-  EdgePainter? getPainter(String type) {
-    if (type.isEmpty) {
-      debugPrint('Warning: Empty edge type requested');
-      return null;
+  EdgePainter? getPainter(String? type) {
+    // Changed to accept nullable String
+    // FIXED: Handle null and empty cases differently
+    if (type == null || type.isEmpty) {
+      // Don't warn for null types - these are expected default cases
+      // Only warn if someone explicitly passes an empty string
+      if (type == '') {
+        // Explicitly empty string
+        debugPrint('Warning: Empty edge type requested');
+      }
+      return null; // Return null for both null and empty - use default painter
     }
 
     final painter = _painters[type];
-    if (painter == null && type.isNotEmpty) {
-      debugPrint('Warning: No painter registered for edge type "$type"');
+    if (painter == null) {
+      // Only warn in debug mode and for non-empty types that aren't registered
+      assert(() {
+        debugPrint('Warning: No painter registered for edge type "$type"');
+        return true;
+      }());
     }
 
     return painter;

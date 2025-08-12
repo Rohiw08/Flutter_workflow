@@ -10,7 +10,7 @@ class ImageNodeWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = node.data['title'] as String? ?? 'Image Node';
 
-    return Container(
+    return SizedBox(
       width: node.size.width,
       height: node.size.height,
       child: Stack(

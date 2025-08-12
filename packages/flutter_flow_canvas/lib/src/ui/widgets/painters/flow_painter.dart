@@ -98,12 +98,13 @@ class FlowPainter extends CustomPainter {
 
         final path = EdgePathCreator.createPath(edge.pathType, start, end);
 
-        final customPainter =
-            controller.edgeRegistry.getPainter(edge.type ?? '');
+        // FIXED: Pass edge.type (which can be null) instead of edge.type ?? ''
+        final customPainter = controller.edgeRegistry.getPainter(edge.type);
 
         if (customPainter != null) {
           customPainter.paint(canvas, path, edge, paint);
         } else {
+          // Use default painting
           canvas.drawPath(path, paint);
           _drawArrowHead(canvas, start, end, paint);
         }

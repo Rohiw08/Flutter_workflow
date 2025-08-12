@@ -19,7 +19,7 @@ export 'src/ui/widgets/flow_canvas_controls.dart';
 export 'src/ui/widgets/helper/alignment_helper.dart' show ControlPanelAlignment;
 
 // Painters
-export 'src/ui/widgets/painters/background_painter.dart' show BackgroundVariant;
+export 'src/ui/widgets/painters/background_painter.dart';
 
 // Registrory
 export 'src/core/state/node_registry.dart';
