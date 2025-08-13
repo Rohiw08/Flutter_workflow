@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/src/theme/edge_label_theme.dart';
+import 'package:flutter_flow_canvas/src/theme/components/edge_label_theme.dart';
 
 class FlowCanvasEdgeTheme {
   final Color defaultColor;

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
+import 'package:flutter_flow_canvas/src/core/providers.dart';
+import 'package:flutter_flow_canvas/src/core/models/node.dart';
+import 'package:flutter_flow_canvas/src/ui/widgets/flow_canvas_controls.dart';
+import 'package:flutter_flow_canvas/src/ui/widgets/helper/alignment_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'painters/background_painter.dart';
 import 'painters/flow_painter.dart';
