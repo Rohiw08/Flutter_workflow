@@ -1,50 +1,33 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../../../flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/core/models/minimap_transform.dart';
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
-/// A data class to hold transformation details for the minimap.
-class MiniMapTransform {
-  final double scale;
-  final double offsetX;
-  final double offsetY;
-  final Rect contentBounds;
-
-  MiniMapTransform({
-    required this.scale,
-    required this.offsetX,
-    required this.offsetY,
-    required this.contentBounds,
-  });
-}
-
-/// The painter responsible for drawing the minimap content.
 class MiniMapPainter extends CustomPainter {
   final FlowCanvasController controller;
+  final FlowCanvasTheme theme;
   final MiniMapNodeColorFunc? nodeColor;
   final MiniMapNodeColorFunc? nodeStrokeColor;
-  final double nodeBorderRadius;
-  final double nodeStrokeWidth;
   final MiniMapNodeBuilder? nodeBuilder;
-  final Color maskColor;
-  final Color maskStrokeColor;
-  final double maskStrokeWidth;
+
   final Size minimapSize;
 
   MiniMapPainter({
     required this.controller,
     this.nodeColor,
     this.nodeStrokeColor,
-    required this.nodeBorderRadius,
-    required this.nodeStrokeWidth,
     this.nodeBuilder,
-    required this.maskColor,
-    required this.maskStrokeColor,
-    required this.maskStrokeWidth,
     required this.minimapSize,
-  }) : super(repaint: controller);
+  })  : theme =
+            controller.interactiveViewerKey?.currentContext?.flowCanvasTheme ??
+                FlowCanvasTheme.light(), // Safely get theme
+        super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Original logic preserved
     if (controller.nodes.isEmpty) return;
 
     final transform =
@@ -56,12 +39,17 @@ class MiniMapPainter extends CustomPainter {
   }
 
   void _drawNodes(Canvas canvas, MiniMapTransform transform) {
-    final defaultNodeColor = Colors.blue.shade400;
-    final defaultStrokeColor = Colors.blue.shade600;
+    // UPDATED: Use colors and properties from the hierarchical miniMap theme
+    final minimapTheme = theme.miniMap;
 
     for (final node in controller.nodes) {
-      final fillColor = nodeColor?.call(node) ?? defaultNodeColor;
-      final strokeColor = nodeStrokeColor?.call(node) ?? defaultStrokeColor;
+      // Allow override from widget, but fall back to the theme colors
+      final fillColor = nodeColor?.call(node) ??
+          (node.isSelected
+              ? minimapTheme.selectedNodeColor
+              : minimapTheme.nodeColor);
+      final strokeColor =
+          nodeStrokeColor?.call(node) ?? minimapTheme.nodeStrokeColor;
 
       final fillPaint = Paint()
         ..color = fillColor
@@ -69,34 +57,48 @@ class MiniMapPainter extends CustomPainter {
       final strokePaint = Paint()
         ..color = strokeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = nodeStrokeWidth;
+        ..strokeWidth = minimapTheme.nodeStrokeWidth;
 
       final nodeRect = getNodeRect(node, transform);
 
       if (nodeBuilder != null) {
+        // Original logic preserved
         canvas.save();
         canvas.translate(nodeRect.left, nodeRect.top);
-        canvas.scale(nodeRect.width / node.size.width,
-            nodeRect.height / node.size.height);
+        if (node.size.width > 0 && node.size.height > 0) {
+          canvas.scale(nodeRect.width / node.size.width,
+              nodeRect.height / node.size.height);
+        }
         final path = nodeBuilder!(node);
         canvas.drawPath(path, fillPaint);
-        if (nodeStrokeWidth > 0) canvas.drawPath(path, strokePaint);
+        if (minimapTheme.nodeStrokeWidth > 0) {
+          canvas.drawPath(path, strokePaint);
+        }
         canvas.restore();
       } else {
+        // UPDATED: Use borderRadius from the theme
         final rrect = RRect.fromRectAndRadius(
-            nodeRect, Radius.circular(nodeBorderRadius));
+            nodeRect, Radius.circular(minimapTheme.borderRadius));
         canvas.drawRRect(rrect, fillPaint);
-        if (nodeStrokeWidth > 0) canvas.drawRRect(rrect, strokePaint);
+        if (minimapTheme.nodeStrokeWidth > 0) {
+          canvas.drawRRect(rrect, strokePaint);
+        }
       }
     }
   }
 
   void _drawViewportMask(Canvas canvas, Size size, MiniMapTransform transform) {
+    // Original logic preserved
     final canvasTransform = controller.transformationController.value;
     final canvasScale = canvasTransform.getMaxScaleOnAxis();
     if (canvasScale <= 0) return;
 
-    final viewportSize = Size(controller.canvasWidth, controller.canvasHeight);
+    final viewportSize = Size(
+        (controller.interactiveViewerKey?.currentContext?.size?.width ??
+            controller.canvasWidth),
+        (controller.interactiveViewerKey?.currentContext?.size?.height ??
+            controller.canvasHeight));
+
     final translation = canvasTransform.getTranslation();
 
     final viewportInCanvas = Rect.fromLTWH(
@@ -126,13 +128,16 @@ class MiniMapPainter extends CustomPainter {
       Path()..addRect(clampedViewportRect),
     );
 
-    canvas.drawPath(maskPath, Paint()..color = maskColor);
+    // UPDATED: Use maskColor from the theme
+    canvas.drawPath(maskPath, Paint()..color = theme.miniMap.maskColor);
 
+    // UPDATED: Use maskStrokeWidth and maskStrokeColor from the theme
+    final maskStrokeWidth = theme.miniMap.maskStrokeWidth;
     if (maskStrokeWidth > 0) {
       canvas.drawRect(
         clampedViewportRect,
         Paint()
-          ..color = maskStrokeColor
+          ..color = theme.miniMap.maskStrokeColor
           ..strokeWidth = maskStrokeWidth
           ..style = PaintingStyle.stroke,
       );
@@ -142,8 +147,7 @@ class MiniMapPainter extends CustomPainter {
   @override
   bool shouldRepaint(MiniMapPainter oldDelegate) => true;
 
-  // --- Static Helper Methods ---
-
+  // Static Helper Methods are unchanged as they are not theme-related.
   static Rect getNodeRect(FlowNode node, MiniMapTransform transform) {
     return Rect.fromLTWH(
       node.position.dx * transform.scale + transform.offsetX,
@@ -172,6 +176,11 @@ class MiniMapPainter extends CustomPainter {
     const padding = 10.0;
     final availableWidth = minimapSize.width - 2 * padding;
     final availableHeight = minimapSize.height - 2 * padding;
+
+    if (contentBounds.width <= 0 || contentBounds.height <= 0) {
+      return MiniMapTransform(
+          scale: 0, offsetX: 0, offsetY: 0, contentBounds: contentBounds);
+    }
 
     final scaleX = availableWidth / contentBounds.width;
     final scaleY = availableHeight / contentBounds.height;

@@ -1,13 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// Enum for control panel alignment positions.
-enum ControlPanelAlignment {
-  topLeft,
-  topRight,
-  bottomLeft,
-  bottomRight,
-  center,
-}
+import 'package:flutter_flow_canvas/src/core/enums.dart';
 
 /// Helper class for converting control panel alignment to Flutter Alignment
 class AlignmentHelper {

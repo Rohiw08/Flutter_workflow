@@ -1,44 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
-
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_utils.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 import '../../../utils/edge_path_creator.dart';
 
 class FlowPainter extends CustomPainter {
   final FlowCanvasController controller;
+  final FlowCanvasTheme theme;
 
-  final Paint _nodePaint = Paint();
-  late final Paint _selectionPaint = Paint()
-    ..color = Colors.blue.withAlpha(25)
-    ..style = PaintingStyle.fill;
-  final Paint _edgePaint = Paint()
-    ..color = Colors.grey.shade600
-    ..strokeWidth = 2.0
-    ..style = PaintingStyle.stroke;
-  final Paint _selectedEdgePaint = Paint()
-    ..color = Colors.blue
-    ..strokeWidth = 3.0
-    ..style = PaintingStyle.stroke;
-
-  FlowPainter({required this.controller}) : super(repaint: controller);
+  FlowPainter({required this.controller})
+      : theme =
+            controller.interactiveViewerKey?.currentContext?.flowCanvasTheme ??
+                FlowCanvasTheme.light(), // Safely get theme from context
+        super(repaint: controller);
 
   Offset? _getHandlePosition(String nodeId, String handleId) {
+    // Original logic preserved
     final handleGlobalPos =
         controller.connectionManager.getHandleGlobalPosition(nodeId, handleId);
     if (handleGlobalPos == null) {
       return null;
     }
-
     final ivKey = controller.interactiveViewerKey;
-
     if (ivKey?.currentContext == null) {
       return null;
     }
-
-    final ivRenderBox = ivKey!.currentContext!.findRenderObject() as RenderBox?;
+    final ivRenderBox = ivKey?.currentContext!.findRenderObject() as RenderBox?;
     if (ivRenderBox == null) {
       return null;
     }
-
     final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
     final handleViewportPos = handleGlobalPos - ivGlobalPos;
     final scenePos =
@@ -48,37 +39,30 @@ class FlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Original logic preserved
     final matrix = controller.transformationController.value;
     final screenRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final canvasRect =
         MatrixUtils.transformRect(matrix.clone()..invert(), screenRect);
 
-    // Draw in optimal order for performance
-    _drawNodes(canvas, canvasRect, matrix); // Pass matrix here
+    _drawNodes(canvas, canvasRect, matrix);
     _drawEdges(canvas, canvasRect);
     _drawConnection(canvas, matrix);
-    _drawSelectionRect(canvas, matrix); // Pass matrix here
+    _drawSelectionRect(canvas, matrix);
   }
 
   void _drawNodes(Canvas canvas, Rect canvasRect, Matrix4 matrix) {
-    // Early exit if no nodes
+    // Original logic preserved, _nodePaint is no longer needed here.
     if (controller.nodes.isEmpty) return;
-
     final visibleNodes = <FlowNode>[];
-    final selectedNodes = <FlowNode>[];
-
     for (final node in controller.nodes) {
       if (!canvasRect.overlaps(node.rect.inflate(100))) continue;
       visibleNodes.add(node);
-      if (node.isSelected) {
-        selectedNodes.add(node);
-      }
     }
-
-    // Draw all cached images in one batch
     for (final node in visibleNodes) {
       if (node.cachedImage != null) {
-        canvas.drawImage(node.cachedImage!, node.position, _nodePaint);
+        // A simple paint object is fine here, as the node itself is a cached image.
+        canvas.drawImage(node.cachedImage!, node.position, Paint());
       }
     }
   }
@@ -93,18 +77,17 @@ class FlowPainter extends CustomPainter {
         final isSelected =
             controller.selectedNodes.contains(edge.sourceNodeId) ||
                 controller.selectedNodes.contains(edge.targetNodeId);
-        final paint =
-            edge.paint ?? (isSelected ? _selectedEdgePaint : _edgePaint);
+
+        // UPDATED: Use the theme to get the correct edge paint
+        final paint = edge.paint ??
+            FlowCanvasThemeUtils.getEdgePaint(theme, isSelected: isSelected);
 
         final path = EdgePathCreator.createPath(edge.pathType, start, end);
-
-        // FIXED: Pass edge.type (which can be null) instead of edge.type ?? ''
         final customPainter = controller.edgeRegistry.getPainter(edge.type);
 
         if (customPainter != null) {
           customPainter.paint(canvas, path, edge, paint);
         } else {
-          // Use default painting
           canvas.drawPath(path, paint);
           _drawArrowHead(canvas, start, end, paint);
         }
@@ -113,7 +96,8 @@ class FlowPainter extends CustomPainter {
   }
 
   void _drawArrowHead(Canvas canvas, Offset start, Offset end, Paint paint) {
-    const double arrowSize = 8.0;
+    // UPDATED: Use arrowHeadSize from the theme
+    final double arrowSize = theme.edge.arrowHeadSize;
     final direction = (end - start).direction;
 
     final arrowPoint1 = end + Offset.fromDirection(direction + 2.8, arrowSize);
@@ -125,7 +109,7 @@ class FlowPainter extends CustomPainter {
       ..lineTo(arrowPoint2.dx, arrowPoint2.dy)
       ..close();
 
-    final originalStyle = paint.style; // Store the original style
+    final originalStyle = paint.style;
     paint.style = PaintingStyle.fill;
     canvas.drawPath(arrowPath, paint);
     paint.style = originalStyle;
@@ -136,47 +120,53 @@ class FlowPainter extends CustomPainter {
     if (connection == null) return;
 
     final ivKey = controller.interactiveViewerKey;
-
-    // Ensure the InteractiveViewer key is available
     if (ivKey?.currentContext == null) return;
 
     final ivRenderBox = ivKey?.currentContext!.findRenderObject() as RenderBox;
     final ivGlobalPos = ivRenderBox.localToGlobal(Offset.zero);
 
-    // --- Correctly transform the start position (the handle) ---
     final startViewportPos = connection.startPosition - ivGlobalPos;
     final start = controller.transformationController.toScene(startViewportPos);
 
-    // --- Correctly transform the end position (the cursor) ---
     final endViewportPos = connection.endPosition - ivGlobalPos;
     final end = controller.transformationController.toScene(endViewportPos);
 
-    // The rest of the drawing logic remains the same
+    final bool isValidTarget = connection.hoveredTargetKey != null;
+
+    // UPDATED: Use colors from the connection theme
+    final connectionColor = isValidTarget
+        ? theme.connection.validTargetColor
+        : theme.connection.activeColor;
+
     final connectionPaint = Paint()
-      ..color =
-          connection.hoveredTargetKey != null ? Colors.green : Colors.blueAccent
-      ..strokeWidth = 2.0
+      ..color = connectionColor
+      ..strokeWidth = theme.connection.strokeWidth
       ..style = PaintingStyle.stroke;
 
     final path = EdgePathCreator.createPath(EdgePathType.bezier, start, end);
     canvas.drawPath(path, connectionPaint);
 
     final endPaint = Paint()
-      ..color =
-          connection.hoveredTargetKey != null ? Colors.green : Colors.blueAccent
+      ..color = connectionColor
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(end, 6.0, endPaint);
+    canvas.drawCircle(end, theme.connection.endPointRadius, endPaint);
   }
 
   void _drawSelectionRect(Canvas canvas, Matrix4 matrix) {
     final selectionRect = controller.selectionRect;
     if (selectionRect == null) return;
 
-    canvas.drawRect(selectionRect, _selectionPaint);
+    // UPDATED: Use colors from the selection theme
+    final selectionPaint = Paint()
+      ..color = theme.selection.fillColor
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRect(selectionRect, selectionPaint);
 
     final strokeWidth = (1.0 / matrix.getMaxScaleOnAxis()).clamp(0.5, 3.0);
-    _drawDashedRect(canvas, selectionRect, Colors.blue, strokeWidth);
+    _drawDashedRect(
+        canvas, selectionRect, theme.selection.borderColor, strokeWidth);
   }
 
   void _drawDashedRect(
@@ -186,20 +176,36 @@ class FlowPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
 
+    // UPDATED: Use dash and gap lengths from the selection theme
+    final dashLength = theme.selection.dashLength;
+    final gapLength = theme.selection.gapLength;
+
     final path = Path()
-      ..addPath(_createDashedLine(rect.topLeft, rect.topRight), Offset.zero)
-      ..addPath(_createDashedLine(rect.topRight, rect.bottomRight), Offset.zero)
       ..addPath(
-          _createDashedLine(rect.bottomRight, rect.bottomLeft), Offset.zero)
-      ..addPath(_createDashedLine(rect.bottomLeft, rect.topLeft), Offset.zero);
+          _createDashedLine(rect.topLeft, rect.topRight, dashLength, gapLength),
+          Offset.zero)
+      ..addPath(
+          _createDashedLine(
+              rect.topRight, rect.bottomRight, dashLength, gapLength),
+          Offset.zero)
+      ..addPath(
+          _createDashedLine(
+              rect.bottomRight, rect.bottomLeft, dashLength, gapLength),
+          Offset.zero)
+      ..addPath(
+          _createDashedLine(
+              rect.bottomLeft, rect.topLeft, dashLength, gapLength),
+          Offset.zero);
 
     canvas.drawPath(path, paint);
   }
 
   Path _createDashedLine(Offset start, Offset end,
       [double dashLength = 5.0, double gapLength = 5.0]) {
+    // Original logic preserved
     final path = Path();
     final distance = (end - start).distance;
+    if (distance == 0) return path;
     final unitVector = (end - start) / distance;
     double currentDistance = 0.0;
     while (currentDistance < distance) {
@@ -219,6 +225,6 @@ class FlowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant FlowPainter oldDelegate) {
-    return oldDelegate.controller != controller;
+    return oldDelegate.controller != controller || oldDelegate.theme != theme;
   }
 }

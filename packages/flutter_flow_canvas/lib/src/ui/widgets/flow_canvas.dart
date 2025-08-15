@@ -6,15 +6,17 @@ import 'package:flutter_flow_canvas/src/core/enums.dart';
 import 'package:flutter_flow_canvas/src/core/providers.dart';
 import 'package:flutter_flow_canvas/src/core/models/node.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/flow_canvas_controls.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/helper/alignment_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'painters/background_painter.dart';
 import 'painters/flow_painter.dart';
 
 class FlowCanvas extends ConsumerStatefulWidget {
-  final BackgroundVariant backgroundVariant;
-  final bool showControls;
+  // Styling overrides
+  final BackgroundVariant? backgroundVariant;
   final Color? backgroundColor;
+
+  // Behavior
+  final bool showControls;
   final double minScale;
   final double maxScale;
   final bool interactive;
@@ -23,7 +25,7 @@ class FlowCanvas extends ConsumerStatefulWidget {
 
   const FlowCanvas({
     super.key,
-    this.backgroundVariant = BackgroundVariant.dots,
+    this.backgroundVariant,
     this.showControls = true,
     this.backgroundColor,
     this.minScale = 0.1,
@@ -38,6 +40,8 @@ class FlowCanvas extends ConsumerStatefulWidget {
 }
 
 class _FlowCanvasState extends ConsumerState<FlowCanvas> {
+  // All internal state and lifecycle methods (_focusNode, _nodeKeys, initState, etc.)
+  // remain completely unchanged as they are not directly theme-related.
   final FocusNode _focusNode = FocusNode();
   final Map<String, GlobalKey> _nodeKeys = {};
   final GlobalKey _interactiveViewerKey = GlobalKey();
@@ -49,13 +53,9 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   @override
   void initState() {
     super.initState();
-
-    // Fixed: Only request focus on user interaction, not automatically
     if (widget.interactive) {
-      // Don't automatically request focus - let user interactions handle it
       _focusNode.canRequestFocus = true;
     }
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _initializeCanvas();
@@ -65,21 +65,15 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
 
   void _initializeCanvas() async {
     if (!mounted) return;
-
     try {
       final controller = ref.read(flowControllerProvider);
       controller.setInteractiveViewerKey(_interactiveViewerKey);
-
       widget.onCanvasInit?.call(controller);
-
-      // Mark as initialized to show nodes
       if (mounted) {
         setState(() {
           _isInitialized = true;
         });
       }
-
-      // Fixed: Add mounted check and delay image capture to avoid initial jank
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (mounted && _isInitialized) {
           _scheduleImageCapture();
@@ -92,7 +86,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
 
   void _scheduleImageCapture() {
     if (_isCapturingImages || !mounted) return;
-
     SchedulerBinding.instance.scheduleFrameCallback((_) {
       if (mounted && !_isCapturingImages) {
         _captureNodeImagesWithThrottle();
@@ -103,10 +96,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   @override
   void didUpdateWidget(covariant FlowCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Fixed: Add mounted check before accessing provider
     if (!_isInitialized || !mounted) return;
-
     try {
       final controller = ref.read(flowControllerProvider);
       if (controller.nodes.any((n) => n.needsRepaint)) {
@@ -126,7 +116,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   void _scheduleUpdateNodeKeys(FlowCanvasController controller) {
     if (_pendingNodeKeysUpdate || !_isInitialized || !mounted) return;
     _pendingNodeKeysUpdate = true;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         try {
@@ -154,59 +143,37 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       ..addAll(newKeys);
   }
 
-  /// Fixed: Atomic image capture with proper error handling and batching
   Future<void> _captureNodeImagesWithThrottle() async {
     if (!mounted || _nodeKeys.isEmpty || _isCapturingImages) return;
-
-    // Fixed: Use atomic flag setting to prevent race conditions
     _isCapturingImages = true;
-
     try {
       final controller = ref.read(flowControllerProvider);
       final nodesToCapture =
           controller.nodes.where((n) => n.needsRepaint).toList();
-
       if (nodesToCapture.isEmpty) {
         return;
       }
-
       final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-
-      // Fixed: Process images in smaller batches to avoid frame drops
       const batchSize = 3;
       for (int i = 0; i < nodesToCapture.length; i += batchSize) {
-        if (!mounted) break; // Check mounted state between batches
-
+        if (!mounted) break;
         final batch = nodesToCapture.skip(i).take(batchSize);
-
         final futures = batch.map((node) async {
           try {
             final key = _nodeKeys[node.id];
             if (key == null) return null;
-
             final boundary = key.currentContext?.findRenderObject();
-
-            // Fixed: Safe type checking for RenderRepaintBoundary
             if (boundary == null || boundary is! RenderRepaintBoundary) {
               return null;
             }
-
             final renderBoundary = boundary;
-
-            // Fixed: Validate boundary state before capturing
             if (!renderBoundary.attached) {
               return null;
             }
-
-            // Add paint state validation before capture
             if (renderBoundary.debugNeedsPaint) {
-              // Skip this node for now, it will be captured in the next frame
               return null;
             }
-            // Alternative: Add additional frame delay
-            await Future.delayed(
-                const Duration(milliseconds: 16)); // Wait one frame
-
+            await Future.delayed(const Duration(milliseconds: 16));
             final image = await renderBoundary.toImage(pixelRatio: pixelRatio);
             return (node.id, image);
           } catch (e) {
@@ -214,20 +181,14 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
             return null;
           }
         }).toList();
-
         final results = await Future.wait(futures);
-
         if (!mounted) break;
-
-        // Update controller with batch results
         for (final result in results) {
           if (result != null && mounted) {
             final (nodeId, image) = result;
             controller.nodeManager.updateNodeImage(nodeId, image);
           }
         }
-
-        // Fixed: Yield between batches to prevent blocking the UI thread
         if (i + batchSize < nodesToCapture.length && mounted) {
           await Future.delayed(const Duration(milliseconds: 1));
         }
@@ -235,7 +196,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     } catch (e) {
       debugPrint('Error in image capture process: $e');
     } finally {
-      // Fixed: Ensure flag is always reset
       if (mounted) {
         _isCapturingImages = false;
       }
@@ -245,13 +205,10 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   Size _canvasSize(FlowCanvasController controller) {
     final size = widget.canvasSize ??
         Size(controller.canvasWidth, controller.canvasHeight);
-
-    // Fixed: Validate canvas size
     if (size.width <= 0 || size.height <= 0) {
       debugPrint('Invalid canvas size: $size, using fallback');
       return const Size(5000, 5000);
     }
-
     return size;
   }
 
@@ -261,11 +218,9 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     required bool isInteractive,
     required bool isForCapture,
   }) {
+    // This method's logic is unchanged.
     try {
-      // Get the widget from the controller using the node registry
       final Widget? nodeWidget = controller.getNodeWidget(node);
-
-      // Fixed: Return descriptive error widget instead of silent failure
       if (nodeWidget == null) {
         return Container(
           width: node.size.width,
@@ -283,9 +238,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           ),
         );
       }
-
       Widget finalWidget = nodeWidget;
-
       if (isForCapture && _nodeKeys.containsKey(node.id)) {
         finalWidget = RepaintBoundary(
           key: _nodeKeys[node.id],
@@ -295,7 +248,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           ),
         );
       }
-
       if (isInteractive && node.isDraggable) {
         finalWidget = GestureDetector(
           onTap: node.isSelectable
@@ -306,7 +258,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           child: finalWidget,
         );
       }
-
       return Positioned(
         left: node.position.dx,
         top: node.position.dy,
@@ -319,7 +270,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   Widget _buildCanvasContent(FlowCanvasController controller) {
-    // Dynamically disable InteractiveViewer's panning when dragging nodes or box selecting
     final isPanningEnabled = widget.interactive &&
         controller.dragMode != DragMode.node &&
         controller.dragMode != DragMode.selection;
@@ -327,24 +277,15 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     return Listener(
       onPointerMove: widget.interactive
           ? (details) {
-              try {
-                if (controller.dragMode == DragMode.handle) {
-                  controller.connectionManager
-                      .updateConnection(details.position);
-                }
-              } catch (e) {
-                debugPrint('Error in pointer move: $e');
+              if (controller.dragMode == DragMode.handle) {
+                controller.connectionManager.updateConnection(details.position);
               }
             }
           : null,
       onPointerUp: widget.interactive
           ? (_) {
-              try {
-                if (controller.dragMode == DragMode.handle) {
-                  controller.connectionManager.endConnection();
-                }
-              } catch (e) {
-                debugPrint('Error in pointer up: $e');
+              if (controller.dragMode == DragMode.handle) {
+                controller.connectionManager.endConnection();
               }
             }
           : null,
@@ -362,24 +303,27 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           height: _canvasSize(controller).height,
           child: Stack(
             children: [
-              // Paint background first
+              // Paint background
               CustomPaint(
                 size: Size(controller.canvasWidth, controller.canvasHeight),
-                painter: BackgroundPainter(
-                  matrix: controller.transformationController.value,
-                  variant: widget.backgroundVariant,
+                // UPDATED: Pass the widget's overrides to the painter.
+                // The painter will use the theme by default and apply these on top.
+                painter: FlowCanvasBackgroundPainter.fromContext(
+                  context,
+                  controller.transformationController.value,
+                  patternOverride: widget.backgroundVariant,
+                  backgroundColorOverride: widget.backgroundColor,
                 ),
               ),
 
-              // Paint flow
+              // Paint flow (edges, connections, etc.)
               CustomPaint(
                 size: Size(controller.canvasWidth, controller.canvasHeight),
                 painter: FlowPainter(controller: controller),
               ),
 
-              // VISIBLE NODES LAYER
+              // The node rendering logic is unchanged.
               if (_isInitialized) ...[
-                // Visible nodes
                 ...controller.nodes.map(
                   (node) => _buildNode(
                     controller: controller,
@@ -388,8 +332,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
                     isForCapture: false,
                   ),
                 ),
-
-                // Offstage nodes for image capture
                 if (_nodeKeys.isNotEmpty)
                   Offstage(
                     offstage: true,
@@ -400,8 +342,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
                             return _buildNode(
                               controller: controller,
                               node: node,
-                              isInteractive:
-                                  false, // Don't make capture nodes interactive
+                              isInteractive: false,
                               isForCapture: true,
                             );
                           },
@@ -426,6 +367,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   Widget _buildInteractiveCanvas(FlowCanvasController controller) {
+    // This method's logic is unchanged.
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: (node, event) {
@@ -439,21 +381,17 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       },
       child: GestureDetector(
         onTap: () {
-          // Fixed: Only request focus on user interaction
           if (widget.interactive && mounted) {
             _focusNode.requestFocus();
           }
         },
-        child: Stack(
-          children: [
-            _buildCanvasContent(controller),
-          ],
-        ),
+        child: _buildCanvasContent(controller),
       ),
     );
   }
 
   Widget _buildStaticCanvas(FlowCanvasController controller) {
+    // This method's logic is unchanged.
     return _buildCanvasContent(controller);
   }
 
@@ -466,21 +404,21 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         _scheduleUpdateNodeKeys(controller);
       }
 
-      return Container(
-        color: widget.backgroundColor,
-        child: Stack(
-          children: [
-            if (widget.interactive)
-              _buildInteractiveCanvas(controller)
-            else
-              _buildStaticCanvas(controller),
-            if (widget.showControls && _isInitialized)
-              const FlowCanvasControls(
-                alignment: ControlPanelAlignment.bottomLeft,
-                orientation: Axis.vertical,
-              ),
-          ],
-        ),
+      // UPDATED: The outer container no longer needs to set a color,
+      // as the FlowCanvasBackgroundPainter handles it. This prevents
+      // potential overdraw issues.
+      return Stack(
+        children: [
+          if (widget.interactive)
+            _buildInteractiveCanvas(controller)
+          else
+            _buildStaticCanvas(controller),
+          if (widget.showControls && _isInitialized)
+            const FlowCanvasControls(
+              alignment: ControlPanelAlignment.bottomLeft,
+              orientation: Axis.vertical,
+            ),
+        ],
       );
     } catch (e) {
       debugPrint('Error building FlowCanvas: $e');

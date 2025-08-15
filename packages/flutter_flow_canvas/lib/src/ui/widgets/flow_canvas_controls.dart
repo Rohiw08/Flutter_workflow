@@ -2,21 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_flow_canvas/src/core/models/flow_controller.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/control_button.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/controllers_divider.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/helper/alignment_helper.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/helper/default_action_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
 class FlowCanvasControls extends ConsumerWidget {
   final bool showDefaultActions;
   final List<FlowCanvasControlAction> additionalActions;
   final Axis orientation;
   final ControlPanelAlignment alignment;
-
-  // Styling
-  final Color? backgroundColor;
-  final Color? buttonColor;
-  final Color? iconColor;
   final double buttonSize;
 
   const FlowCanvasControls({
@@ -24,27 +19,15 @@ class FlowCanvasControls extends ConsumerWidget {
     this.showDefaultActions = true,
     this.additionalActions = const [],
     this.orientation = Axis.vertical,
-    this.alignment = ControlPanelAlignment.topRight,
-    this.backgroundColor,
-    this.buttonColor,
-    this.iconColor,
+    this.alignment = ControlPanelAlignment.bottomRight, // Changed default
     this.buttonSize = 32.0,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(flowControllerProvider);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final bgColor =
-        backgroundColor ?? (isDark ? const Color(0xFF1F2937) : Colors.white);
-    final btnColor = buttonColor ??
-        (isDark ? const Color(0xFF374151) : const Color(0xFFF9FAFB));
-    final iconCol =
-        iconColor ?? (isDark ? Colors.white : const Color(0xFF6B7280));
-    final dividerColor =
-        isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB);
+    // UPDATED: Get the specific controls theme from the context
+    final controlsTheme = context.flowCanvasTheme.controls;
 
     final defaultActions = showDefaultActions
         ? DefaultActionsHelper.getDefaultActions(controller.navigationManager)
@@ -52,17 +35,17 @@ class FlowCanvasControls extends ConsumerWidget {
 
     final List<Widget> children = [];
 
+    // This local function remains the same, but the widgets it adds are now theme-aware.
     void addActions(List<FlowCanvasControlAction> actions) {
       for (int i = 0; i < actions.length; i++) {
         children.add(ControlButton(
           action: actions[i],
-          color: btnColor,
-          iconColor: iconCol,
           size: buttonSize,
+          // REMOVED: ControlButton now gets its colors from the theme internally.
         ));
         if (i < actions.length - 1) {
-          children.add(
-              ControlDivider(orientation: orientation, color: dividerColor));
+          // UPDATED: Divider now gets its color from the theme.
+          children.add(ControlDivider(orientation: orientation));
         }
       }
     }
@@ -70,27 +53,23 @@ class FlowCanvasControls extends ConsumerWidget {
     if (defaultActions.isNotEmpty) addActions(defaultActions);
 
     if (defaultActions.isNotEmpty && additionalActions.isNotEmpty) {
-      children
-          .add(SectionDivider(orientation: orientation, color: dividerColor));
+      // UPDATED: SectionDivider also gets its color from the theme.
+      children.add(SectionDivider(orientation: orientation));
     }
 
     if (additionalActions.isNotEmpty) addActions(additionalActions);
 
     if (children.isEmpty) return const SizedBox.shrink();
 
+    // The main panel container
     final panel = Container(
-      padding: const EdgeInsets.all(4.0),
+      // UPDATED: Padding and decoration are now sourced from the theme.
+      padding: controlsTheme.padding,
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: dividerColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: controlsTheme.backgroundColor,
+        borderRadius: controlsTheme.borderRadius,
+        boxShadow: controlsTheme.shadows,
+        border: Border.all(color: controlsTheme.dividerColor, width: 1),
       ),
       child: Flex(
         direction: orientation,
@@ -99,14 +78,15 @@ class FlowCanvasControls extends ConsumerWidget {
       ),
     );
 
-    // Fix: Prevent stretching in vertical orientation.
+    // This logic to prevent stretching remains the same.
     final constrainedPanel =
         orientation == Axis.vertical ? IntrinsicWidth(child: panel) : panel;
 
     return Align(
       alignment: AlignmentHelper.getAlignment(alignment),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding:
+            const EdgeInsets.all(16.0), // Outer padding from the screen edge
         child: constrainedPanel,
       ),
     );

@@ -77,13 +77,18 @@ class FlowCanvasDemo extends ConsumerWidget {
           ),
         ],
       ),
-      body: FlowCanvas(
-        backgroundVariant: BackgroundVariant.dots,
-        showControls: true,
-        // --- 4. Use onCanvasInit to set up the initial graph ---
-        onCanvasInit: (controller) {
-          _addSampleGraph(controller);
-        },
+      body: Stack(
+        children: [
+          FlowCanvas(
+            backgroundVariant: BackgroundVariant.dots,
+            showControls: true,
+            // --- 4. Use onCanvasInit to set up the initial graph ---
+            onCanvasInit: (controller) {
+              _addSampleGraph(controller);
+            },
+          ),
+          const MiniMap()
+        ],
       ),
     );
   }

@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/src/theme/theme_provider.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
 
-class AnimatedFlowCanvasTheme extends ConsumerWidget {
-  final Widget child;
+class AnimatedFlowCanvasTheme extends StatelessWidget {
+  final FlowCanvasTheme theme;
   final Duration duration;
   final Curve curve;
+  final Widget child;
 
   const AnimatedFlowCanvasTheme({
     super.key,
+    required this.theme,
     required this.child,
     this.duration = const Duration(milliseconds: 300),
     this.curve = Curves.easeInOut,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(flowCanvasThemeProvider);
-
-    return AnimatedContainer(
+  Widget build(BuildContext context) {
+    return AnimatedTheme(
       duration: duration,
       curve: curve,
-      decoration: BoxDecoration(
-        color: theme.background.backgroundColor,
+      data: Theme.of(context).copyWith(
+        extensions: [
+          ...Theme.of(context).extensions.values,
+        ],
       ),
       child: child,
     );

@@ -99,6 +99,7 @@ class FlowCanvasController extends ChangeNotifier {
 
   void setInteractiveViewerKey(GlobalKey key) {
     interactiveViewerKey = key;
+    _state.interactiveViewerKey = key;
   }
 
   // Utility methods

@@ -1,59 +1,74 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/src/theme/default_theme.dart';
-import 'package:flutter_flow_canvas/src/theme/components/flow_canvas_theme.dart';
-import 'package:flutter_flow_canvas/src/theme/components/node_theme.dart';
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
 import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
-/// Mixin for widgets that need theme access
 mixin FlowCanvasThemeMixin<T extends StatefulWidget> on State<T> {
-  FlowCanvasTheme get theme {
-    // Try to get from context extensions first
-    try {
-      return context.flowTheme;
-    } catch (e) {
-      // Fallback to default theme
-      return FlowCanvasThemes.professional;
-    }
+  FlowCanvasTheme get flowTheme {
+    return context.flowCanvasTheme;
   }
 
-  /// Get node style for current theme and state
-  NodeStyleData getNodeStyle({
+  /// Get node decoration for current state
+  BoxDecoration getNodeDecoration({
     bool isSelected = false,
     bool isHovered = false,
-    bool isDisabled = false,
     bool hasError = false,
   }) {
-    return theme.node.getStyleForState(
-      isSelected: isSelected,
-      isHovered: isHovered,
-      isDisabled: isDisabled,
-      hasError: hasError,
+    Color backgroundColor = flowTheme.node.defaultBackgroundColor;
+    Color borderColor = flowTheme.node.defaultBorderColor;
+    double borderWidth = flowTheme.node.defaultBorderWidth;
+
+    if (hasError) {
+      borderColor = flowTheme.node.errorBorderColor;
+      borderWidth = 2.0;
+    } else if (isSelected) {
+      borderColor = flowTheme.node.selectedBorderColor;
+      borderWidth = 2.0;
+    } else if (isHovered) {
+      backgroundColor = flowTheme.node.hoverBackgroundColor ??
+          flowTheme.node.defaultBackgroundColor;
+    }
+
+    return BoxDecoration(
+      color: backgroundColor,
+      border: Border.all(color: borderColor, width: borderWidth),
+      borderRadius: BorderRadius.circular(flowTheme.node.borderRadius),
+      boxShadow: flowTheme.node.shadows,
     );
   }
 
-  /// Get edge paint for current theme
-  Paint getEdgePaint({bool isSelected = false, Paint? customPaint}) {
-    if (customPaint != null) return customPaint;
+  /// Get edge paint for current state
+  Paint getEdgePaint({
+    bool isSelected = false,
+    bool isHovered = false,
+  }) {
+    Color color = flowTheme.edge.defaultColor;
+    double width = flowTheme.edge.defaultStrokeWidth;
+
+    if (isSelected) {
+      color = flowTheme.edge.selectedColor;
+      width = flowTheme.edge.selectedStrokeWidth;
+    } else if (isHovered) {
+      color = flowTheme.edge.hoverColor ?? flowTheme.edge.defaultColor;
+    }
 
     return Paint()
-      ..color = isSelected ? theme.edge.selectedColor : theme.edge.defaultColor
-      ..strokeWidth = isSelected
-          ? theme.edge.selectedStrokeWidth
-          : theme.edge.defaultStrokeWidth
-      ..style = PaintingStyle.stroke;
+      ..color = color
+      ..strokeWidth = width
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
   }
 
-  /// Get handle color for state
+  /// Get handle color for current state
   Color getHandleColor({
     bool isHovered = false,
-    bool isConnecting = false,
-    bool isValidTarget = false,
-    bool isInvalidTarget = false,
+    bool isActive = false,
+    bool isValid = false,
+    bool isInvalid = false,
   }) {
-    if (isInvalidTarget) return theme.handle.invalidTargetColor;
-    if (isValidTarget) return theme.handle.validTargetColor;
-    if (isConnecting) return theme.handle.connectingColor;
-    if (isHovered) return theme.handle.hoverColor;
-    return theme.handle.idleColor;
+    if (isInvalid) return flowTheme.handle.invalidTargetColor;
+    if (isValid) return flowTheme.handle.validTargetColor;
+    if (isActive) return flowTheme.handle.activeColor;
+    if (isHovered) return flowTheme.handle.hoverColor;
+    return flowTheme.handle.idleColor;
   }
 }

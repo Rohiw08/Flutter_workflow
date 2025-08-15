@@ -6,4 +6,21 @@ enum HandleType { both, source, target }
 
 enum EdgePathType { bezier, step, straight }
 
-enum BackgroundVariant { none, lines, dots, cross }
+enum BackgroundVariant { none, lines, dots, cross, grid }
+
+enum ControlPanelAlignment {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+  center
+}
+
+enum ThemeCategory {
+  professional,
+  creative,
+  accessibility,
+  technical,
+  gaming,
+  custom,
+}

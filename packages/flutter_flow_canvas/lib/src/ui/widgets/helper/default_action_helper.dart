@@ -23,11 +23,6 @@ class DefaultActionsHelper {
         onPressed: controller.fitView,
         tooltip: 'Fit View',
       ),
-      FlowCanvasControlAction(
-        icon: Icons.center_focus_strong,
-        onPressed: controller.centerView,
-        tooltip: 'Center View',
-      ),
     ];
   }
 }

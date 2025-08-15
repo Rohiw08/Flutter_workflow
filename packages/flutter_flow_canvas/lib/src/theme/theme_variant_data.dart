@@ -1,4 +1,5 @@
-import 'package:flutter_flow_canvas/src/theme/components/flow_canvas_theme.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
 
 class FlowCanvasThemeData {
   final String name;
@@ -34,13 +35,4 @@ class FlowCanvasThemeData {
       isCustom: true,
     );
   }
-}
-
-enum ThemeCategory {
-  professional,
-  creative,
-  accessibility,
-  technical,
-  gaming,
-  custom,
 }

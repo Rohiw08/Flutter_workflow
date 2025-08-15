@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_flow_canvas/src/theme/components/handle_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
 /// A callback function to validate a potential connection.
 typedef IsValidConnectionCallback = bool Function(
@@ -10,32 +12,30 @@ typedef IsValidConnectionCallback = bool Function(
   String targetHandleId,
 );
 
-/// A React Flow style connection handle that can be placed on nodes.
+/// A theme-aware, React Flow style connection handle that can be placed on nodes.
 class Handle extends ConsumerStatefulWidget {
   final String nodeId;
   final String id;
   final HandlePosition? position;
   final HandleType type;
-  final double size;
   final Widget? child;
 
-  /// Custom colors for the handle states
+  // Styling overrides
+  final double? size;
   final Color? idleColor;
   final Color? hoverColor;
-  final Color? connectingColor;
+  final Color? activeColor; // Renamed from connectingColor
   final Color? validTargetColor;
+  final Color? invalidTargetColor; // Added for completeness
 
-  /// A master switch to enable or disable all connections for this handle.
-  final bool isConnectable;
-  final bool isConnectableStart;
-  final bool isConnectableEnd;
+  // Behavior overrides
+  final bool? isConnectable;
+  final bool? isConnectableStart;
+  final bool? isConnectableEnd;
+  final bool? enableAnimations;
 
-  /// Enables or disables all hover and connection animations for performance
-  /// or stylistic reasons.
-  final bool enableAnimations;
+  // Callbacks
   final IsValidConnectionCallback? onValidateConnection;
-
-  /// A callback fired when a connection is successfully made involving this
   final VoidCallback? onConnect;
 
   const Handle({
@@ -44,16 +44,17 @@ class Handle extends ConsumerStatefulWidget {
     required this.id,
     this.position,
     this.type = HandleType.source,
-    this.size = 10.0,
     this.child,
+    this.size,
     this.idleColor,
     this.hoverColor,
-    this.connectingColor,
+    this.activeColor,
     this.validTargetColor,
-    this.isConnectable = true,
-    this.isConnectableStart = true,
-    this.isConnectableEnd = true,
-    this.enableAnimations = true,
+    this.invalidTargetColor,
+    this.isConnectable,
+    this.isConnectableStart,
+    this.isConnectableEnd,
+    this.enableAnimations,
     this.onValidateConnection,
     this.onConnect,
   });
@@ -63,7 +64,6 @@ class Handle extends ConsumerStatefulWidget {
 }
 
 class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
-  // Fixed: Generate unique GlobalKey for each handle instance
   late final GlobalKey<HandleState> _key;
   bool _isHovered = false;
   bool _isConnecting = false;
@@ -71,31 +71,24 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _pulseAnimation;
-
   late final FlowCanvasController controller;
-
   String? _registeredNodeId;
   String? _registeredHandleId;
 
+  // initState and other lifecycle methods remain the same
   @override
   void initState() {
     super.initState();
-
-    // Fixed: Create unique GlobalKey for each handle instance
     _key = GlobalKey<HandleState>();
-
     controller = ref.read(flowControllerProvider);
-
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
-
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
-
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(
       CurvedAnimation(
         parent: _scaleController,
@@ -103,16 +96,13 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
         reverseCurve: Curves.easeInCubic,
       ),
     );
-
     _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ),
     );
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Fixed: Add mounted check before registration
       if (mounted) {
         _registerHandle();
       }
@@ -121,7 +111,6 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // Fixed: Unregister first, then dispose controllers to prevent animation issues
     _unregisterHandle();
     _scaleController.dispose();
     _pulseController.dispose();
@@ -134,7 +123,6 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     if (oldWidget.nodeId != widget.nodeId || oldWidget.id != widget.id) {
       _unregisterHandle();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Fixed: Add mounted check in callback
         if (mounted) {
           _registerHandle();
         }
@@ -160,14 +148,19 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
+  // Pan handling logic remains the same
   void _onPanStart(DragStartDetails details) {
-    if (!widget.isConnectable ||
-        !widget.isConnectableStart ||
-        widget.type != HandleType.source) {
+    final handleTheme = context.flowCanvasTheme.handle;
+    final enableAnimations =
+        widget.enableAnimations ?? handleTheme.enableAnimations;
+    final isConnectable = widget.isConnectable ?? true;
+    final isConnectableStart = widget.isConnectableStart ?? true;
+
+    if (!isConnectable ||
+        !isConnectableStart ||
+        widget.type == HandleType.target) {
       return;
     }
-
-    // Fixed: Check if still mounted before starting connection
     if (!mounted) return;
 
     controller.connectionManager.startConnection(
@@ -178,7 +171,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
     if (mounted) {
       setState(() => _isConnecting = true);
-      if (widget.enableAnimations) {
+      if (enableAnimations) {
         _scaleController.forward();
         _pulseController.repeat();
       }
@@ -186,13 +179,16 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
   }
 
   void _onPanEnd(DragEndDetails details) {
+    final handleTheme = context.flowCanvasTheme.handle;
+    final enableAnimations =
+        widget.enableAnimations ?? handleTheme.enableAnimations;
     if (!_isConnecting || !mounted) return;
 
     controller.connectionManager.endConnection();
 
     if (mounted) {
       setState(() => _isConnecting = false);
-      if (widget.enableAnimations) {
+      if (enableAnimations) {
         _pulseController.stop();
         _pulseController.reset();
         if (!_isHovered) {
@@ -202,27 +198,30 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
-  Color _getHandleColor() {
+  // UPDATED: This method now sources its colors from the theme,
+  // allowing widget properties to act as overrides.
+  Color _getHandleColor(FlowCanvasHandleTheme handleTheme) {
     final currentConnection = ref.watch(
         flowControllerProvider.select((c) => c.connectionManager.connection));
     final isTargeted =
         currentConnection?.hoveredTargetKey == '${widget.nodeId}/${widget.id}';
-    final canBeTarget = widget.isConnectable &&
-        widget.isConnectableEnd &&
-        widget.type == HandleType.target;
+    final canBeTarget = (widget.isConnectable ?? true) &&
+        (widget.isConnectableEnd ?? true) &&
+        widget.type != HandleType.source;
 
     if (isTargeted && canBeTarget) {
-      return widget.validTargetColor ?? const Color(0xFF10B981); // Green
+      return widget.validTargetColor ?? handleTheme.validTargetColor;
     }
     if (_isConnecting) {
-      return widget.connectingColor ?? const Color(0xFF3B82F6); // Blue
+      return widget.activeColor ?? handleTheme.activeColor;
     }
     if (_isHovered) {
-      return widget.hoverColor ?? const Color(0xFF6B7280); // Gray-500
+      return widget.hoverColor ?? handleTheme.hoverColor;
     }
-    return widget.idleColor ?? const Color(0xFF9CA3AF); // Gray-400
+    return widget.idleColor ?? handleTheme.idleColor;
   }
 
+  // Alignment and offset logic remains the same
   Alignment _getAlignment() {
     switch (widget.position) {
       case HandlePosition.top:
@@ -238,10 +237,8 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
-  // TODO: Implement a more robust offset calculation based on position
-  /// Returns the offset for the handle based on its position.
-  Offset _getOffset() {
-    final double offset = widget.size / 2;
+  Offset _getOffset(double handleSize) {
+    final double offset = handleSize / 2;
     switch (widget.position) {
       case HandlePosition.top:
         return Offset(0, offset - 17);
@@ -256,32 +253,37 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildReactFlowHandle() {
-    final handleColor = _getHandleColor();
+  // UPDATED: This build method now sources all its styling from the theme.
+  Widget _buildReactFlowHandle(FlowCanvasHandleTheme handleTheme) {
+    final handleColor = _getHandleColor(handleTheme);
+    final handleSize = widget.size ?? handleTheme.size;
+    final enableAnimations =
+        widget.enableAnimations ?? handleTheme.enableAnimations;
+
     final currentConnection = ref.watch(
         flowControllerProvider.select((c) => c.connectionManager.connection));
     final isTargeted =
         currentConnection?.hoveredTargetKey == '${widget.nodeId}/${widget.id}';
-    final canBeTarget = widget.isConnectable &&
-        widget.isConnectableEnd &&
-        widget.type == HandleType.target;
+    final canBeTarget = (widget.isConnectable ?? true) &&
+        (widget.isConnectableEnd ?? true) &&
+        widget.type != HandleType.source;
     final showPulse = _isConnecting || (isTargeted && canBeTarget);
 
     return Stack(
       alignment: Alignment.center,
       children: [
-        if (showPulse && widget.enableAnimations)
+        if (showPulse && enableAnimations)
           AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
               return Container(
-                width: widget.size * (2 + _pulseAnimation.value * 1.5),
-                height: widget.size * (2 + _pulseAnimation.value * 1.5),
+                width: handleSize * (2 + _pulseAnimation.value * 1.5),
+                height: handleSize * (2 + _pulseAnimation.value * 1.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: handleColor.withOpacity(
-                      0.3 * (1 - _pulseAnimation.value),
+                    color: handleColor.withAlpha(
+                      (75 * (1 - _pulseAnimation.value)).toInt(),
                     ),
                     width: 1.0,
                   ),
@@ -291,30 +293,24 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
           ),
         if (_isHovered || _isConnecting || (isTargeted && canBeTarget))
           Container(
-            width: widget.size * 1.8,
-            height: widget.size * 1.8,
+            width: handleSize * 1.8,
+            height: handleSize * 1.8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: handleColor.withAlpha(50),
             ),
           ),
         Container(
-          width: widget.size,
-          height: widget.size,
+          width: handleSize,
+          height: handleSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: handleColor,
             border: Border.all(
-              color: Colors.white,
-              width: 1.5,
+              color: handleTheme.borderColor,
+              width: handleTheme.borderWidth,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(25),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            boxShadow: handleTheme.shadows,
           ),
         ),
       ],
@@ -323,11 +319,18 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // UPDATED: Get theme once at the top of the build method.
+    final handleTheme = context.flowCanvasTheme.handle;
+    final handleSize = widget.size ?? handleTheme.size;
+    final enableAnimations =
+        widget.enableAnimations ?? handleTheme.enableAnimations;
+    final isConnectable = widget.isConnectable ?? true;
+
     final handleWidget = MouseRegion(
       onEnter: (_) {
         if (mounted) {
           setState(() => _isHovered = true);
-          if (widget.enableAnimations) {
+          if (enableAnimations) {
             _scaleController.forward();
           }
         }
@@ -335,14 +338,13 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
       onExit: (_) {
         if (mounted) {
           setState(() => _isHovered = false);
-          if (widget.enableAnimations && !_isConnecting) {
+          if (enableAnimations && !_isConnecting) {
             _scaleController.reverse();
           }
         }
       },
-      cursor: widget.isConnectable
-          ? SystemMouseCursors.grab
-          : SystemMouseCursors.basic,
+      cursor:
+          isConnectable ? SystemMouseCursors.grab : SystemMouseCursors.basic,
       child: GestureDetector(
         onPanStart: _onPanStart,
         onPanEnd: _onPanEnd,
@@ -351,12 +353,12 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
           builder: (context, child) {
             return Transform.scale(
               key: _key,
-              scale: widget.enableAnimations ? _scaleAnimation.value : 1.0,
+              scale: enableAnimations ? _scaleAnimation.value : 1.0,
               child: SizedBox(
-                width: widget.size * 2.5,
-                height: widget.size * 2.5,
+                width: handleSize * 2.5, // Gesture area
+                height: handleSize * 2.5, // Gesture area
                 child: Center(
-                  child: widget.child ?? _buildReactFlowHandle(),
+                  child: widget.child ?? _buildReactFlowHandle(handleTheme),
                 ),
               ),
             );
@@ -369,7 +371,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
       return Align(
         alignment: _getAlignment(),
         child: Transform.translate(
-          offset: _getOffset(),
+          offset: _getOffset(handleSize),
           child: handleWidget,
         ),
       );

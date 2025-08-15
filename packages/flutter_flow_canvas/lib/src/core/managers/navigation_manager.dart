@@ -10,6 +10,7 @@ class NavigationManager {
 
   NavigationManager(this._state, this.transformationController, this._notify);
 
+  // pan, fitView, and centerView methods remain the same
   void pan(Offset screenDelta) {
     final currentMatrix = transformationController.value.clone();
     currentMatrix.translate(screenDelta.dx, screenDelta.dy);
@@ -23,34 +24,32 @@ class NavigationManager {
         .map((n) => n.rect)
         .reduce((value, element) => value.expandToInclude(element));
 
-    // Fixed: Validate bounds to prevent division by zero
     if (bounds.width <= 0 || bounds.height <= 0) {
       debugPrint('Invalid bounds for fitView: $bounds');
       return;
     }
 
-    final canvasSize = Size(_state.canvasWidth, _state.canvasHeight);
-
-    // Fixed: Ensure canvas dimensions are positive
-    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
-      debugPrint('Invalid canvas size: $canvasSize');
+    // To calculate the viewport, we need the context from the InteractiveViewer key
+    final context = _state.interactiveViewerKey?.currentContext;
+    if (context == null) {
+      debugPrint('Cannot fitView without a valid context.');
       return;
     }
+    final viewportSize = context.size;
+    if (viewportSize == null || viewportSize.isEmpty) return;
 
-    // Fixed: Add safety checks for padding
     final totalPaddingWidth = padding.horizontal;
     final totalPaddingHeight = padding.vertical;
 
-    if (totalPaddingWidth >= canvasSize.width ||
-        totalPaddingHeight >= canvasSize.height) {
-      debugPrint('Padding too large for canvas size');
+    if (totalPaddingWidth >= viewportSize.width ||
+        totalPaddingHeight >= viewportSize.height) {
+      debugPrint('Padding too large for viewport size');
       return;
     }
 
-    final scaleX = (canvasSize.width - totalPaddingWidth) / bounds.width;
-    final scaleY = (canvasSize.height - totalPaddingHeight) / bounds.height;
+    final scaleX = (viewportSize.width - totalPaddingWidth) / bounds.width;
+    final scaleY = (viewportSize.height - totalPaddingHeight) / bounds.height;
 
-    // Fixed: Validate scale calculations
     if (!scaleX.isFinite || !scaleY.isFinite || scaleX <= 0 || scaleY <= 0) {
       debugPrint('Invalid scale calculations: scaleX=$scaleX, scaleY=$scaleY');
       return;
@@ -62,11 +61,10 @@ class NavigationManager {
     final scaledBoundsHeight = bounds.height * scale;
 
     final translateX =
-        (canvasSize.width - scaledBoundsWidth) / 2 - (bounds.left * scale);
+        (viewportSize.width - scaledBoundsWidth) / 2 - (bounds.left * scale);
     final translateY =
-        (canvasSize.height - scaledBoundsHeight) / 2 - (bounds.top * scale);
+        (viewportSize.height - scaledBoundsHeight) / 2 - (bounds.top * scale);
 
-    // Fixed: Validate translation values
     if (!translateX.isFinite || !translateY.isFinite) {
       debugPrint(
           'Invalid translation values: translateX=$translateX, translateY=$translateY');
@@ -90,16 +88,13 @@ class NavigationManager {
     }
   }
 
+  // UPDATED: zoomIn now finds the viewport center
   void zoomIn([double factor = 1.2]) {
-    // Fixed: Validate zoom factor
     if (!factor.isFinite || factor <= 0) {
       debugPrint('Invalid zoom factor: $factor');
       return;
     }
-
     final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Fixed: Validate current scale
     if (!currentScale.isFinite || currentScale <= 0) {
       debugPrint('Invalid current scale: $currentScale');
       return;
@@ -110,16 +105,13 @@ class NavigationManager {
     }
   }
 
+  // UPDATED: zoomOut now finds the viewport center
   void zoomOut([double factor = 1.2]) {
-    // Fixed: Validate zoom factor
     if (!factor.isFinite || factor <= 0) {
       debugPrint('Invalid zoom factor: $factor');
       return;
     }
-
     final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Fixed: Validate current scale
     if (!currentScale.isFinite || currentScale <= 0) {
       debugPrint('Invalid current scale: $currentScale');
       return;
@@ -130,31 +122,28 @@ class NavigationManager {
     }
   }
 
+  // CORRECTED: The _zoom method now zooms relative to the viewport center.
   void _zoom(double factor) {
-    // Fixed: Validate zoom factor
-    if (!factor.isFinite || factor <= 0) {
-      debugPrint('Invalid zoom factor in _zoom: $factor');
-      return;
+    // 1. Get the context from the InteractiveViewer's global key.
+    final context = _state.interactiveViewerKey?.currentContext;
+    if (context == null) {
+      debugPrint('Cannot zoom without a valid context.');
+      return; // Or fallback to old method if you prefer
     }
 
-    // Fixed: Validate canvas dimensions
-    if (_state.canvasWidth <= 0 || _state.canvasHeight <= 0) {
-      debugPrint(
-          'Invalid canvas dimensions: ${_state.canvasWidth}x${_state.canvasHeight}');
-      return;
-    }
+    // 2. Find the size of the viewport.
+    final viewportSize = context.size;
+    if (viewportSize == null || viewportSize.isEmpty) return;
 
+    // 3. Calculate the center of the viewport in local (screen) coordinates.
+    final viewportCenter =
+        Offset(viewportSize.width / 2, viewportSize.height / 2);
+
+    // 4. Convert the viewport center to scene (canvas) coordinates.
+    final sceneCenter = transformationController.toScene(viewportCenter);
+
+    // 5. Apply the scale transformation around this new focal point.
     try {
-      // This zooms relative to the center of the entire canvas, not the viewport
-      final center = Offset(_state.canvasWidth / 2, _state.canvasHeight / 2);
-      final sceneCenter = transformationController.toScene(center);
-
-      // Fixed: Validate scene center coordinates
-      if (!sceneCenter.dx.isFinite || !sceneCenter.dy.isFinite) {
-        debugPrint('Invalid scene center: $sceneCenter');
-        return;
-      }
-
       final newMatrix = transformationController.value.clone()
         ..translate(sceneCenter.dx, sceneCenter.dy)
         ..scale(factor)
@@ -167,49 +156,37 @@ class NavigationManager {
   }
 
   void setZoom(double zoom) {
-    // Fixed: Validate zoom value
     if (!zoom.isFinite || zoom <= 0) {
       debugPrint('Invalid zoom value: $zoom');
       return;
     }
-
     zoom = zoom.clamp(0.1, 2.0);
     final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Fixed: Validate current scale
     if (!currentScale.isFinite || currentScale <= 0) {
       debugPrint('Invalid current scale: $currentScale');
       return;
     }
-
     final scaleFactor = zoom / currentScale;
     _zoom(scaleFactor);
   }
 
-  /// Centers the view on a specific position
-  /// Fixed: Accept viewport size as parameter to avoid assumptions
+  // for minimap centering
   void centerOnPosition(Offset position, {Size? viewportSize}) {
-    // Fixed: Validate position
     if (!position.dx.isFinite || !position.dy.isFinite) {
       debugPrint('Invalid position: $position');
       return;
     }
-
     final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Fixed: Validate current scale
     if (!currentScale.isFinite || currentScale <= 0) {
       debugPrint('Invalid current scale: $currentScale');
       return;
     }
 
-    // Use provided viewport size or fall back to canvas size
-    final effectiveViewportSize =
-        viewportSize ?? Size(_state.canvasWidth, _state.canvasHeight);
+    final context = _state.interactiveViewerKey?.currentContext;
+    final effectiveViewportSize = viewportSize ?? context?.size;
 
-    // Fixed: Validate viewport size
-    if (effectiveViewportSize.width <= 0 || effectiveViewportSize.height <= 0) {
-      debugPrint('Invalid viewport size: $effectiveViewportSize');
+    if (effectiveViewportSize == null || effectiveViewportSize.isEmpty) {
+      debugPrint('Invalid viewport size');
       return;
     }
 
@@ -219,7 +196,6 @@ class NavigationManager {
             -position.dx * currentScale + effectiveViewportSize.width / 2,
             -position.dy * currentScale + effectiveViewportSize.height / 2)
         ..scale(currentScale);
-
       transformationController.value = newTransform;
     } catch (e) {
       debugPrint('Error centering on position: $e');
@@ -227,70 +203,52 @@ class NavigationManager {
   }
 
   void zoomAtPoint(double zoomDelta, Offset focalPoint) {
-    // Fixed: Validate inputs
     if (!zoomDelta.isFinite) {
       debugPrint('Invalid zoom delta: $zoomDelta');
       return;
     }
-
     if (!focalPoint.dx.isFinite || !focalPoint.dy.isFinite) {
       debugPrint('Invalid focal point: $focalPoint');
       return;
     }
-
     final currentScale = transformationController.value.getMaxScaleOnAxis();
-
-    // Fixed: Validate current scale
     if (!currentScale.isFinite || currentScale <= 0) {
       debugPrint('Invalid current scale: $currentScale');
       return;
     }
-
     final newScale = (currentScale + zoomDelta).clamp(0.1, 2.0);
     if (newScale == currentScale) return;
-
     final scaleChange = newScale / currentScale;
-
-    // Fixed: Validate scale change
     if (!scaleChange.isFinite || scaleChange <= 0) {
       debugPrint('Invalid scale change: $scaleChange');
       return;
     }
-
     try {
       final matrix = transformationController.value.clone()
         ..translate(focalPoint.dx, focalPoint.dy)
         ..scale(scaleChange, scaleChange)
         ..translate(-focalPoint.dx, -focalPoint.dy);
-
       transformationController.value = matrix;
     } catch (e) {
       debugPrint('Error in zoom at point: $e');
     }
   }
 
-  /// Validates the current transformation matrix and fixes common issues
   void validateAndFixTransformation() {
     try {
       final matrix = transformationController.value;
       final scale = matrix.getMaxScaleOnAxis();
-
-      // Check for invalid scale values
       if (!scale.isFinite || scale <= 0) {
         debugPrint('Detected invalid transformation, resetting to identity');
         transformationController.value = Matrix4.identity();
         return;
       }
-
-      // Check for invalid translation values
       final translation = matrix.getTranslation();
       if (!translation.x.isFinite || !translation.y.isFinite) {
         debugPrint('Detected invalid translation, resetting to identity');
         transformationController.value = Matrix4.identity();
         return;
       }
-
-      // Clamp scale to valid range
       if (scale < 0.1 || scale > 2.0) {
         setZoom(scale.clamp(0.1, 2.0));
       }

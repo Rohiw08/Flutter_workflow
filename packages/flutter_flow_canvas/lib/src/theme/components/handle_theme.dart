@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class FlowCanvasHandleTheme {
   final Color idleColor;
   final Color hoverColor;
-  final Color connectingColor;
+  final Color activeColor;
   final Color validTargetColor;
   final Color invalidTargetColor;
   final double size;
@@ -15,7 +15,7 @@ class FlowCanvasHandleTheme {
   const FlowCanvasHandleTheme({
     required this.idleColor,
     required this.hoverColor,
-    required this.connectingColor,
+    required this.activeColor, // Updated in constructor
     required this.validTargetColor,
     required this.invalidTargetColor,
     this.size = 10.0,
@@ -29,7 +29,7 @@ class FlowCanvasHandleTheme {
     return FlowCanvasHandleTheme(
       idleColor: const Color(0xFF9CA3AF),
       hoverColor: const Color(0xFF6B7280),
-      connectingColor: const Color(0xFF3B82F6),
+      activeColor: const Color(0xFF3B82F6), // Updated in light factory
       validTargetColor: const Color(0xFF10B981),
       invalidTargetColor: const Color(0xFFEF4444),
       size: 10.0,
@@ -50,7 +50,7 @@ class FlowCanvasHandleTheme {
     return FlowCanvasHandleTheme(
       idleColor: const Color(0xFF6B7280),
       hoverColor: const Color(0xFF9CA3AF),
-      connectingColor: const Color(0xFF60A5FA),
+      activeColor: const Color(0xFF60A5FA), // Updated in dark factory
       validTargetColor: const Color(0xFF34D399),
       invalidTargetColor: const Color(0xFFF87171),
       size: 10.0,
@@ -70,7 +70,7 @@ class FlowCanvasHandleTheme {
   FlowCanvasHandleTheme copyWith({
     Color? idleColor,
     Color? hoverColor,
-    Color? connectingColor,
+    Color? activeColor, // Updated in copyWith
     Color? validTargetColor,
     Color? invalidTargetColor,
     double? size,
@@ -82,7 +82,7 @@ class FlowCanvasHandleTheme {
     return FlowCanvasHandleTheme(
       idleColor: idleColor ?? this.idleColor,
       hoverColor: hoverColor ?? this.hoverColor,
-      connectingColor: connectingColor ?? this.connectingColor,
+      activeColor: activeColor ?? this.activeColor, // Updated in copyWith
       validTargetColor: validTargetColor ?? this.validTargetColor,
       invalidTargetColor: invalidTargetColor ?? this.invalidTargetColor,
       size: size ?? this.size,

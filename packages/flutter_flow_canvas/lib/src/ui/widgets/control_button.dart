@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_canvas/src/core/models/flow_controller.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
-/// Control Button widget for canvas controls
+/// A theme-aware button for canvas control actions.
 class ControlButton extends StatefulWidget {
   final FlowCanvasControlAction action;
-  final Color color;
-  final Color iconColor;
   final double size;
 
   const ControlButton({
     super.key,
     required this.action,
-    required this.color,
-    required this.iconColor,
     required this.size,
   });
 
@@ -25,6 +22,15 @@ class _ControlButtonState extends State<ControlButton> {
 
   @override
   Widget build(BuildContext context) {
+    // UPDATED: Get the controls theme from the context
+    final controlsTheme = context.flowCanvasTheme.controls;
+
+    // UPDATED: Determine colors based on the theme and hover state
+    final buttonColor =
+        _isHovered ? controlsTheme.buttonHoverColor : controlsTheme.buttonColor;
+    final iconColor =
+        _isHovered ? controlsTheme.iconHoverColor : controlsTheme.iconColor;
+
     return Tooltip(
       message: widget.action.tooltip,
       child: MouseRegion(
@@ -38,19 +44,18 @@ class _ControlButtonState extends State<ControlButton> {
             width: widget.size,
             height: widget.size,
             decoration: BoxDecoration(
-              color: _isHovered ? widget.color.withAlpha(200) : widget.color,
-              borderRadius: BorderRadius.circular(4),
-              border: _isHovered
-                  ? Border.all(
-                      color: Theme.of(context).primaryColor,
-                      width: 1.5,
-                    )
-                  : null,
+              // UPDATED: Use theme-derived colors
+              color: buttonColor,
+              borderRadius: controlsTheme.borderRadius
+                  .resolve(Directionality.of(context))
+                  .subtract(
+                      BorderRadius.circular(4)), // Adjust for inner radius
             ),
             child: Icon(
               widget.action.icon,
-              size: widget.size * 0.5,
-              color: widget.iconColor,
+              size: widget.size * 0.6,
+              // UPDATED: Use theme-derived icon color
+              color: iconColor,
             ),
           ),
         ),

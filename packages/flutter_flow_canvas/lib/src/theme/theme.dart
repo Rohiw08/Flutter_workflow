@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
 import 'package:flutter_flow_canvas/src/theme/components/background_theme.dart';
+import 'package:flutter_flow_canvas/src/theme/components/edge_label_theme.dart';
 import 'package:flutter_flow_canvas/src/theme/components/node_theme.dart';
 import 'package:flutter_flow_canvas/src/theme/components/edge_theme.dart';
 import 'package:flutter_flow_canvas/src/theme/components/handle_theme.dart';
@@ -79,6 +81,83 @@ class FlowCanvasTheme {
       controls: controls ?? this.controls,
       miniMap: miniMap ?? this.miniMap,
       connection: connection ?? this.connection,
+    );
+  }
+
+  factory FlowCanvasTheme.fromColorScheme(ColorScheme colorScheme) {
+    final isDark = colorScheme.brightness == Brightness.dark;
+
+    return FlowCanvasTheme(
+      background: FlowCanvasBackgroundTheme(
+        backgroundColor: colorScheme.surface,
+        variant: BackgroundVariant.dots,
+        patternColor: colorScheme.outline.withAlpha(isDark ? 60 : 40),
+        opacity: 1.0,
+        fadeOnZoom: true,
+      ),
+      node: FlowCanvasNodeTheme(
+        defaultBackgroundColor: colorScheme.surfaceContainer,
+        defaultBorderColor: colorScheme.outlineVariant,
+        selectedBackgroundColor: colorScheme.primaryContainer,
+        selectedBorderColor: colorScheme.primary,
+        errorBackgroundColor: colorScheme.errorContainer,
+        errorBorderColor: colorScheme.error,
+        hoverBackgroundColor: colorScheme.surfaceContainerHigh,
+        defaultTextStyle: TextStyle(color: colorScheme.onSurface),
+        shadows: [
+          BoxShadow(
+            color: colorScheme.shadow.withAlpha(isDark ? 51 : 26),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      edge: FlowCanvasEdgeTheme(
+        defaultColor: colorScheme.outline,
+        selectedColor: colorScheme.primary,
+        animatedColor: colorScheme.tertiary,
+        label: EdgeLabelTheme(
+          textStyle: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 12,
+          ),
+          backgroundColor: colorScheme.surfaceContainerLow,
+          borderColor: colorScheme.outlineVariant,
+        ),
+      ),
+      handle: FlowCanvasHandleTheme(
+        idleColor: colorScheme.outline,
+        hoverColor: colorScheme.primary,
+        activeColor: colorScheme.primary,
+        validTargetColor: colorScheme.tertiary,
+        invalidTargetColor: colorScheme.error,
+        borderColor: colorScheme.surface,
+      ),
+      selection: FlowCanvasSelectionTheme(
+        fillColor: colorScheme.primary.withAlpha(39),
+        borderColor: colorScheme.primary,
+      ),
+      controls: FlowCanvasControlTheme(
+        backgroundColor: colorScheme.surfaceContainer,
+        buttonColor: colorScheme.surfaceContainerHigh,
+        buttonHoverColor: colorScheme.surfaceContainerHighest,
+        iconColor: colorScheme.onSurfaceVariant,
+        iconHoverColor: colorScheme.onSurface,
+        dividerColor: colorScheme.outlineVariant,
+      ),
+      miniMap: FlowCanvasMiniMapTheme(
+        backgroundColor: colorScheme.surfaceContainerLow,
+        nodeColor: colorScheme.primary,
+        nodeStrokeColor: colorScheme.primaryContainer,
+        selectedNodeColor: colorScheme.tertiary,
+        maskColor: colorScheme.scrim.withAlpha(153),
+        maskStrokeColor: colorScheme.outline,
+      ),
+      connection: FlowCanvasConnectionTheme(
+        activeColor: colorScheme.primary,
+        validTargetColor: colorScheme.tertiary,
+        invalidTargetColor: colorScheme.error,
+      ),
     );
   }
 }
