@@ -41,6 +41,9 @@ class FlowCanvasController extends ChangeNotifier {
   // Fixed: Track disposal state to prevent double disposal
   bool _isDisposed = false;
 
+  // Callback for notifying listeners
+  late final VoidCallback notify;
+
   // Public Getters from State
   List<FlowNode> get nodes => List.unmodifiable(_state.nodes);
   List<FlowEdge> get edges => List.unmodifiable(_state.edges);
@@ -72,11 +75,9 @@ class FlowCanvasController extends ChangeNotifier {
     _state.canvasHeight = canvasHeight;
 
     // Initialize managers and handlers
-    void notify() {
-      if (!_isDisposed) {
-        notifyListeners();
-      }
-    }
+    notify = () {
+      if (!_isDisposed) notifyListeners();
+    };
 
     try {
       nodeManager = NodeManager(_state, notify, nodeRegistry);
@@ -131,7 +132,7 @@ class FlowCanvasController extends ChangeNotifier {
 
     try {
       _state.clear();
-      notifyListeners();
+      notify();
     } catch (e) {
       debugPrint('Error clearing canvas: $e');
     }
@@ -184,25 +185,13 @@ class FlowCanvasController extends ChangeNotifier {
     _isDisposed = true;
 
     try {
-      // Fixed: Properly dispose all resources in correct order
-
-      // 1. Remove transformation listener first
-      transformationController.removeListener(notifyListeners);
-
-      // 2. Cancel any ongoing connections
+      transformationController.removeListener(notify);
       connectionManager.cancelConnection();
-
-      // 3. Clear state to remove references
       _state.clear();
-
-      // 4. Dispose transformation controller
       transformationController.dispose();
-
-      // 5. Call super.dispose() last
       super.dispose();
     } catch (e) {
       debugPrint('Error disposing FlowCanvasController: $e');
-      // Still call super.dispose() even if there's an error
       super.dispose();
     }
   }

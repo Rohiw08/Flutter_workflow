@@ -26,14 +26,12 @@ class ConnectionManager {
 
   // === HANDLE MANAGEMENT ===
 
-  /// Register a handle for connection detection
   void registerHandle(
       String nodeId, String handleId, GlobalKey<HandleState> key) {
     _state.handleRegistry['$nodeId/$handleId'] = key;
     _notify();
   }
 
-  /// Unregister a handle
   void unregisterHandle(String nodeId, String handleId) {
     _state.handleRegistry.remove('$nodeId/$handleId');
   }
@@ -41,38 +39,35 @@ class ConnectionManager {
   /// Get global position of a handle with safe type checking
   Offset? getHandleGlobalPosition(String nodeId, String handleId) {
     final key = _state.handleRegistry['$nodeId/$handleId'];
+    final context = key?.currentContext;
 
-    // Check if key exists and has context
-    if (key?.currentContext == null) {
+    if (context == null || !context.mounted) {
       return null;
     }
-
     try {
-      final renderObject = key!.currentContext!.findRenderObject();
+      final renderObject = context.findRenderObject();
 
-      // Fixed: Add safe type checking for RenderObject
       if (renderObject == null || renderObject is! RenderBox) {
         return null;
       }
 
       final renderBox = renderObject;
 
-      // Additional safety: Check if RenderBox is attached
       if (!renderBox.attached) {
         return null;
       }
 
       final size = renderBox.size;
 
-      // Fixed: Validate size before using it
       if (size.width <= 0 || size.height <= 0) {
         return null;
       }
 
       return renderBox.localToGlobal(Offset(size.width / 2, size.height / 2));
     } catch (e) {
-      // Handle any unexpected errors gracefully
-      debugPrint('Error getting handle position for $nodeId/$handleId: $e');
+      // Catching the error prevents the crash. The edge will not be drawn for this frame.
+      // This is a safe fallback for this specific timing issue.
+      // debugPrint('Safely handled error getting handle position for $nodeId/$handleId: $e');
       return null;
     }
   }
@@ -96,28 +91,25 @@ class ConnectionManager {
     connection!.endPosition = globalPosition;
 
     String? hoveredKey;
-
-    // Fixed: Reuse BoxHitTestResult for better performance
     final hitTestResult = BoxHitTestResult();
 
     for (final entry in _state.handleRegistry.entries) {
       try {
-        final renderObject = entry.value.currentContext?.findRenderObject();
+        // This part is less likely to crash but good to be safe.
+        final context = entry.value.currentContext;
+        if (context == null || !context.mounted) continue;
 
-        // Fixed: Safe type checking for RenderObject
+        final renderObject = context.findRenderObject();
+
         if (renderObject == null || renderObject is! RenderBox) {
           continue;
         }
 
         final renderBox = renderObject;
 
-        // Check if RenderBox is attached and valid
         if (!renderBox.attached) {
           continue;
         }
-
-        // Clear previous hit test results
-        // hitTestResult.path.clear();
 
         if (renderBox.hitTest(hitTestResult,
             position: renderBox.globalToLocal(globalPosition))) {
@@ -128,7 +120,6 @@ class ConnectionManager {
           }
         }
       } catch (e) {
-        // Log error but continue processing other handles
         debugPrint('Error in hit testing for handle ${entry.key}: $e');
         continue;
       }
@@ -143,7 +134,6 @@ class ConnectionManager {
       try {
         final targetKeyParts = _state.connection!.hoveredTargetKey!.split('/');
 
-        // Fixed: Validate target key format
         if (targetKeyParts.length != 2) {
           debugPrint(
               'Invalid target key format: ${_state.connection!.hoveredTargetKey}');
@@ -152,7 +142,7 @@ class ConnectionManager {
         }
 
         final newEdge = FlowEdge(
-          id: _generateUniqueEdgeId(), // Fixed: Use collision-resistant ID generation
+          id: _generateUniqueEdgeId(),
           sourceNodeId: _state.connection!.fromNodeId,
           sourceHandleId: _state.connection!.fromHandleId,
           targetNodeId: targetKeyParts[0],
@@ -172,14 +162,12 @@ class ConnectionManager {
     _cancelConnectionInternal();
   }
 
-  /// Internal method to clean up connection state
   void _cancelConnectionInternal() {
     _state.connection = null;
     _state.dragMode = DragMode.none;
     _notify();
   }
 
-  /// Debug method to validate handle registry state
   void validateHandleRegistry() {
     final invalidHandles = <String>[];
 
@@ -187,24 +175,13 @@ class ConnectionManager {
       final handleKey = entry.key;
       final globalKey = entry.value;
 
-      if (globalKey.currentContext == null) {
+      if (globalKey.currentContext == null ||
+          !globalKey.currentContext!.mounted) {
         invalidHandles.add(handleKey);
         continue;
-      }
-
-      final renderObject = globalKey.currentContext!.findRenderObject();
-      if (renderObject == null || renderObject is! RenderBox) {
-        invalidHandles.add(handleKey);
-        continue;
-      }
-
-      final renderBox = renderObject;
-      if (!renderBox.attached) {
-        invalidHandles.add(handleKey);
       }
     }
 
-    // Clean up invalid handles
     for (final handleKey in invalidHandles) {
       _state.handleRegistry.remove(handleKey);
       debugPrint('Removed invalid handle: $handleKey');

@@ -270,9 +270,41 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   Widget _buildCanvasContent(FlowCanvasController controller) {
-    final isPanningEnabled = widget.interactive &&
-        controller.dragMode != DragMode.node &&
-        controller.dragMode != DragMode.selection;
+    final canvasContent = SizedBox(
+      width: _canvasSize(controller).width,
+      height: _canvasSize(controller).height,
+      child: Stack(
+        children: [
+          // Paint flow (edges, connections, etc.)
+          CustomPaint(
+            size: Size(controller.canvasWidth, controller.canvasHeight),
+            painter: FlowPainter(controller: controller),
+          ),
+
+          // Your existing node rendering logic...
+          if (_isInitialized) ...[
+            ...controller.nodes.map(
+              (node) => _buildNode(
+                controller: controller,
+                node: node,
+                isInteractive: widget.interactive &&
+                    !controller.navigationManager.isLocked,
+                isForCapture: false,
+              ),
+            ),
+            // ... rest of your node logic
+          ] else ...[
+            const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
 
     return Listener(
       onPointerMove: widget.interactive
@@ -289,79 +321,14 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
               }
             }
           : null,
-      child: InteractiveViewer(
-        key: _interactiveViewerKey,
+      child: _InteractiveViewerWrapper(
+        isLocked: controller.navigationManager.isLocked,
         transformationController: controller.transformationController,
-        constrained: false,
-        boundaryMargin: const EdgeInsets.all(0),
+        interactive: widget.interactive,
         minScale: widget.minScale,
         maxScale: widget.maxScale,
-        panEnabled: isPanningEnabled,
-        scaleEnabled: widget.interactive,
-        child: SizedBox(
-          width: _canvasSize(controller).width,
-          height: _canvasSize(controller).height,
-          child: Stack(
-            children: [
-              // Paint background
-              CustomPaint(
-                size: Size(controller.canvasWidth, controller.canvasHeight),
-                // UPDATED: Pass the widget's overrides to the painter.
-                // The painter will use the theme by default and apply these on top.
-                painter: FlowCanvasBackgroundPainter.fromContext(
-                  context,
-                  controller.transformationController.value,
-                  patternOverride: widget.backgroundVariant,
-                  backgroundColorOverride: widget.backgroundColor,
-                ),
-              ),
-
-              // Paint flow (edges, connections, etc.)
-              CustomPaint(
-                size: Size(controller.canvasWidth, controller.canvasHeight),
-                painter: FlowPainter(controller: controller),
-              ),
-
-              // The node rendering logic is unchanged.
-              if (_isInitialized) ...[
-                ...controller.nodes.map(
-                  (node) => _buildNode(
-                    controller: controller,
-                    node: node,
-                    isInteractive: isPanningEnabled,
-                    isForCapture: false,
-                  ),
-                ),
-                if (_nodeKeys.isNotEmpty)
-                  Offstage(
-                    offstage: true,
-                    child: Stack(
-                      children: [
-                        ...controller.nodes.where((n) => n.needsRepaint).map(
-                          (node) {
-                            return _buildNode(
-                              controller: controller,
-                              node: node,
-                              isInteractive: false,
-                              isForCapture: true,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-              ] else ...[
-                const Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+        viewerKey: _interactiveViewerKey,
+        child: canvasContent,
       ),
     );
   }
@@ -404,11 +371,19 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         _scheduleUpdateNodeKeys(controller);
       }
 
-      // UPDATED: The outer container no longer needs to set a color,
-      // as the FlowCanvasBackgroundPainter handles it. This prevents
-      // potential overdraw issues.
       return Stack(
         children: [
+          if (widget.interactive)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: FlowCanvasBackgroundPainter.fromContext(
+                  context,
+                  controller.transformationController.value,
+                  patternOverride: widget.backgroundVariant,
+                  backgroundColorOverride: widget.backgroundColor,
+                ),
+              ),
+            ),
           if (widget.interactive)
             _buildInteractiveCanvas(controller)
           else
@@ -433,5 +408,43 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         ),
       );
     }
+  }
+}
+
+// Replace the existing _InteractiveViewerWrapper class with this one
+class _InteractiveViewerWrapper extends StatelessWidget {
+  final bool isLocked; // CHANGED: Takes a simple boolean now
+  final TransformationController transformationController;
+  final Widget child;
+  final bool interactive;
+  final double minScale;
+  final double maxScale;
+  final GlobalKey viewerKey;
+
+  const _InteractiveViewerWrapper({
+    required this.isLocked, // CHANGED
+    required this.transformationController,
+    required this.child,
+    required this.interactive,
+    required this.minScale,
+    required this.maxScale,
+    required this.viewerKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // REMOVED ValueListenableBuilder
+    return InteractiveViewer(
+      key: viewerKey,
+      transformationController: transformationController,
+      constrained: false,
+      boundaryMargin: const EdgeInsets.all(0),
+      minScale: minScale,
+      maxScale: maxScale,
+      // Use the 'isLocked' boolean directly
+      panEnabled: interactive && !isLocked,
+      scaleEnabled: interactive && !isLocked,
+      child: child,
+    );
   }
 }

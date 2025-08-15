@@ -1,24 +1,38 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../state/canvas_state.dart';
 
 class NavigationManager {
   final FlowCanvasState _state;
   final TransformationController transformationController;
-  // ignore: unused_field
   final VoidCallback _notify;
+
+  final ValueNotifier<bool> _lockNotifier = ValueNotifier<bool>(false);
+  bool get isLocked => _lockNotifier.value;
+  ValueListenable<bool> get lockState => _lockNotifier;
 
   NavigationManager(this._state, this.transformationController, this._notify);
 
-  // pan, fitView, and centerView methods remain the same
+  void dispose() {
+    _lockNotifier.dispose();
+  }
+
+  /// Toggles the pan and zoom lock on the canvas.
+  void toggleLock() {
+    _lockNotifier.value = !_lockNotifier.value;
+    _notify();
+  }
+
   void pan(Offset screenDelta) {
+    if (_lockNotifier.value) return;
     final currentMatrix = transformationController.value.clone();
     currentMatrix.translate(screenDelta.dx, screenDelta.dy);
     transformationController.value = currentMatrix;
   }
 
   void fitView({EdgeInsets padding = const EdgeInsets.all(50)}) {
-    if (_state.nodes.isEmpty) return;
+    if (_lockNotifier.value || _state.nodes.isEmpty) return;
 
     final bounds = _state.nodes
         .map((n) => n.rect)
@@ -29,7 +43,6 @@ class NavigationManager {
       return;
     }
 
-    // To calculate the viewport, we need the context from the InteractiveViewer key
     final context = _state.interactiveViewerKey?.currentContext;
     if (context == null) {
       debugPrint('Cannot fitView without a valid context.');
@@ -81,6 +94,7 @@ class NavigationManager {
   }
 
   void centerView() {
+    if (_lockNotifier.value) return;
     try {
       transformationController.value = Matrix4.identity();
     } catch (e) {
@@ -88,67 +102,49 @@ class NavigationManager {
     }
   }
 
-  // UPDATED: zoomIn now finds the viewport center
   void zoomIn([double factor = 1.2]) {
-    if (!factor.isFinite || factor <= 0) {
-      debugPrint('Invalid zoom factor: $factor');
+    if (_lockNotifier.value || !factor.isFinite || factor <= 0) {
       return;
     }
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (!currentScale.isFinite || currentScale <= 0) {
-      debugPrint('Invalid current scale: $currentScale');
       return;
     }
-
     if (currentScale * factor <= 2.0) {
       _zoom(factor);
     }
   }
 
-  // UPDATED: zoomOut now finds the viewport center
   void zoomOut([double factor = 1.2]) {
-    if (!factor.isFinite || factor <= 0) {
-      debugPrint('Invalid zoom factor: $factor');
+    if (_lockNotifier.value || !factor.isFinite || factor <= 0) {
       return;
     }
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (!currentScale.isFinite || currentScale <= 0) {
-      debugPrint('Invalid current scale: $currentScale');
       return;
     }
-
     if (currentScale / factor >= 0.1) {
       _zoom(1 / factor);
     }
   }
 
-  // CORRECTED: The _zoom method now zooms relative to the viewport center.
   void _zoom(double factor) {
-    // 1. Get the context from the InteractiveViewer's global key.
+    if (_lockNotifier.value) return;
     final context = _state.interactiveViewerKey?.currentContext;
     if (context == null) {
       debugPrint('Cannot zoom without a valid context.');
-      return; // Or fallback to old method if you prefer
+      return;
     }
-
-    // 2. Find the size of the viewport.
     final viewportSize = context.size;
     if (viewportSize == null || viewportSize.isEmpty) return;
-
-    // 3. Calculate the center of the viewport in local (screen) coordinates.
     final viewportCenter =
         Offset(viewportSize.width / 2, viewportSize.height / 2);
-
-    // 4. Convert the viewport center to scene (canvas) coordinates.
     final sceneCenter = transformationController.toScene(viewportCenter);
-
-    // 5. Apply the scale transformation around this new focal point.
     try {
       final newMatrix = transformationController.value.clone()
         ..translate(sceneCenter.dx, sceneCenter.dy)
         ..scale(factor)
         ..translate(-sceneCenter.dx, -sceneCenter.dy);
-
       transformationController.value = newMatrix;
     } catch (e) {
       debugPrint('Error in zoom operation: $e');
@@ -156,40 +152,31 @@ class NavigationManager {
   }
 
   void setZoom(double zoom) {
-    if (!zoom.isFinite || zoom <= 0) {
-      debugPrint('Invalid zoom value: $zoom');
+    if (_lockNotifier.value || !zoom.isFinite || zoom <= 0) {
       return;
     }
     zoom = zoom.clamp(0.1, 2.0);
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (!currentScale.isFinite || currentScale <= 0) {
-      debugPrint('Invalid current scale: $currentScale');
       return;
     }
     final scaleFactor = zoom / currentScale;
     _zoom(scaleFactor);
   }
 
-  // for minimap centering
   void centerOnPosition(Offset position, {Size? viewportSize}) {
-    if (!position.dx.isFinite || !position.dy.isFinite) {
-      debugPrint('Invalid position: $position');
+    if (_lockNotifier.value || !position.dx.isFinite || !position.dy.isFinite) {
       return;
     }
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (!currentScale.isFinite || currentScale <= 0) {
-      debugPrint('Invalid current scale: $currentScale');
       return;
     }
-
     final context = _state.interactiveViewerKey?.currentContext;
     final effectiveViewportSize = viewportSize ?? context?.size;
-
     if (effectiveViewportSize == null || effectiveViewportSize.isEmpty) {
-      debugPrint('Invalid viewport size');
       return;
     }
-
     try {
       final newTransform = Matrix4.identity()
         ..translate(
@@ -203,24 +190,20 @@ class NavigationManager {
   }
 
   void zoomAtPoint(double zoomDelta, Offset focalPoint) {
-    if (!zoomDelta.isFinite) {
-      debugPrint('Invalid zoom delta: $zoomDelta');
+    if (_lockNotifier.value || !zoomDelta.isFinite) {
       return;
     }
     if (!focalPoint.dx.isFinite || !focalPoint.dy.isFinite) {
-      debugPrint('Invalid focal point: $focalPoint');
       return;
     }
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     if (!currentScale.isFinite || currentScale <= 0) {
-      debugPrint('Invalid current scale: $currentScale');
       return;
     }
     final newScale = (currentScale + zoomDelta).clamp(0.1, 2.0);
     if (newScale == currentScale) return;
     final scaleChange = newScale / currentScale;
     if (!scaleChange.isFinite || scaleChange <= 0) {
-      debugPrint('Invalid scale change: $scaleChange');
       return;
     }
     try {
