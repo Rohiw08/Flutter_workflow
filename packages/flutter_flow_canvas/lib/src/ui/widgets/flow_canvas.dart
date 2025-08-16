@@ -218,7 +218,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     required bool isInteractive,
     required bool isForCapture,
   }) {
-    // This method's logic is unchanged.
     try {
       final Widget? nodeWidget = controller.getNodeWidget(node);
       if (nodeWidget == null) {
@@ -238,7 +237,9 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           ),
         );
       }
+
       Widget finalWidget = nodeWidget;
+
       if (isForCapture && _nodeKeys.containsKey(node.id)) {
         finalWidget = RepaintBoundary(
           key: _nodeKeys[node.id],
@@ -248,6 +249,8 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           ),
         );
       }
+
+      // SIMPLIFIED: Remove lock check since IgnorePointer handles it
       if (isInteractive && node.isDraggable) {
         finalWidget = GestureDetector(
           onTap: node.isSelectable
@@ -258,6 +261,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
           child: finalWidget,
         );
       }
+
       return Positioned(
         left: node.position.dx,
         top: node.position.dy,
@@ -287,8 +291,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
               (node) => _buildNode(
                 controller: controller,
                 node: node,
-                isInteractive: widget.interactive &&
-                    !controller.navigationManager.isLocked,
+                isInteractive: widget.interactive, // Removed lock check
                 isForCapture: false,
               ),
             ),
@@ -322,7 +325,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
             }
           : null,
       child: _InteractiveViewerWrapper(
-        isLocked: controller.navigationManager.isLocked,
+        controller: controller,
         transformationController: controller.transformationController,
         interactive: widget.interactive,
         minScale: widget.minScale,
@@ -411,9 +414,8 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 }
 
-// Replace the existing _InteractiveViewerWrapper class with this one
 class _InteractiveViewerWrapper extends StatelessWidget {
-  final bool isLocked; // CHANGED: Takes a simple boolean now
+  final FlowCanvasController controller;
   final TransformationController transformationController;
   final Widget child;
   final bool interactive;
@@ -422,7 +424,7 @@ class _InteractiveViewerWrapper extends StatelessWidget {
   final GlobalKey viewerKey;
 
   const _InteractiveViewerWrapper({
-    required this.isLocked, // CHANGED
+    required this.controller,
     required this.transformationController,
     required this.child,
     required this.interactive,
@@ -433,17 +435,25 @@ class _InteractiveViewerWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // REMOVED ValueListenableBuilder
-    return InteractiveViewer(
-      key: viewerKey,
-      transformationController: transformationController,
-      constrained: false,
-      boundaryMargin: const EdgeInsets.all(0),
-      minScale: minScale,
-      maxScale: maxScale,
-      // Use the 'isLocked' boolean directly
-      panEnabled: interactive && !isLocked,
-      scaleEnabled: interactive && !isLocked,
+    return ValueListenableBuilder<bool>(
+      valueListenable: controller.navigationManager.lockState,
+      builder: (context, isLocked, constantChild) {
+        return IgnorePointer(
+          ignoring: isLocked, // This handles all locking logic
+          child: InteractiveViewer(
+            key: viewerKey,
+            transformationController: transformationController,
+            constrained: false,
+            boundaryMargin: const EdgeInsets.all(0),
+            minScale: minScale,
+            maxScale: maxScale,
+            // Set to constant values - IgnorePointer handles the locking
+            panEnabled: interactive,
+            scaleEnabled: interactive,
+            child: constantChild!,
+          ),
+        );
+      },
       child: child,
     );
   }

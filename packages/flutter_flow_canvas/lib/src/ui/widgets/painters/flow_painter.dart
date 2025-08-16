@@ -39,7 +39,6 @@ class FlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Original logic preserved
     final matrix = controller.transformationController.value;
     final screenRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final canvasRect =

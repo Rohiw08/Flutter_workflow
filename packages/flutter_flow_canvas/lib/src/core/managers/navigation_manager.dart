@@ -6,13 +6,12 @@ import '../state/canvas_state.dart';
 class NavigationManager {
   final FlowCanvasState _state;
   final TransformationController transformationController;
-  final VoidCallback _notify;
 
   final ValueNotifier<bool> _lockNotifier = ValueNotifier<bool>(false);
   bool get isLocked => _lockNotifier.value;
   ValueListenable<bool> get lockState => _lockNotifier;
 
-  NavigationManager(this._state, this.transformationController, this._notify);
+  NavigationManager(this._state, this.transformationController);
 
   void dispose() {
     _lockNotifier.dispose();
@@ -21,7 +20,6 @@ class NavigationManager {
   /// Toggles the pan and zoom lock on the canvas.
   void toggleLock() {
     _lockNotifier.value = !_lockNotifier.value;
-    _notify();
   }
 
   void pan(Offset screenDelta) {

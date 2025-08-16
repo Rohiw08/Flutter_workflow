@@ -84,8 +84,7 @@ class FlowCanvasController extends ChangeNotifier {
       edgeManager = EdgeManager(_state, notify);
       selectionManager = SelectionManager(_state, notify);
       connectionManager = ConnectionManager(_state, notify, edgeManager);
-      navigationManager =
-          NavigationManager(_state, transformationController, notify);
+      navigationManager = NavigationManager(_state, transformationController);
       interactionHandler = InteractionHandler(_state, transformationController,
           notify, selectionManager, nodeManager, navigationManager);
       keyboardHandler = KeyboardHandler(
