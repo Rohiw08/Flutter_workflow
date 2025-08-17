@@ -76,7 +76,6 @@ class MiniMapPainter extends CustomPainter {
         }
         canvas.restore();
       } else {
-        // UPDATED: Use borderRadius from the theme
         final rrect = RRect.fromRectAndRadius(
             nodeRect, Radius.circular(minimapTheme.borderRadius));
         canvas.drawRRect(rrect, fillPaint);

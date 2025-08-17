@@ -21,8 +21,8 @@ class FlowCanvasState {
   bool enableMultiSelection = true;
   bool enableKeyboardShortcuts = true;
   bool enableBoxSelection = true;
-  double canvasWidth = 5000;
-  double canvasHeight = 5000;
+  double canvasWidth = 50000;
+  double canvasHeight = 50000;
 
   // Helper methods
   FlowNode? getNode(String nodeId) {
@@ -41,6 +41,6 @@ class FlowCanvasState {
     connection = null;
     selectionRect = null;
     dragMode = DragMode.none;
-    interactiveViewerKey = null; // Also clear the key
+    interactiveViewerKey = null;
   }
 }

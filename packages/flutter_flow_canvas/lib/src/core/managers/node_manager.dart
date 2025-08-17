@@ -23,17 +23,16 @@ class NodeManager {
     _notify();
   }
 
-  /// Adds a new node to the canvas.
-  /// The widget for this node will be built by the NodeRegistry based on the node's type.
   void addNode(FlowNode node) {
     if (_state.nodes.any((n) => n.id == node.id)) {
       throw ArgumentError('Node with id "${node.id}" already exists');
     }
-    // VALIDATION: Check if the node type is registered
     if (!_nodeRegistry.isRegistered(node.type)) {
       throw ArgumentError(
           'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding the node.');
     }
+
+    // Just add the node directly. Its position is an absolute world coordinate.
     _state.nodes.add(node);
     _notify();
   }
@@ -48,6 +47,7 @@ class NodeManager {
         throw ArgumentError(
             'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding nodes.');
       }
+      node.position += Offset(_state.canvasWidth / 2, _state.canvasWidth / 2);
       _state.nodes.add(node);
     }
     _notify();

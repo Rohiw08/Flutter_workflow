@@ -17,7 +17,6 @@ export 'src/ui/widgets/flow_canvas_controls.dart';
 
 // UI helpers
 export 'src/ui/widgets/helper/alignment_helper.dart';
-export 'src/ui/widgets/helper/background_wrapper.dart';
 
 // Painters
 export 'src/ui/widgets/painters/background_painter.dart';

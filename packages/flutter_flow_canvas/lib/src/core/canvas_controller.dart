@@ -71,8 +71,6 @@ class FlowCanvasController extends ChangeNotifier {
     _state.enableMultiSelection = enableMultiSelection;
     _state.enableKeyboardShortcuts = enableKeyboardShortcuts;
     _state.enableBoxSelection = enableBoxSelection;
-    _state.canvasWidth = canvasWidth;
-    _state.canvasHeight = canvasHeight;
 
     // Initialize managers and handlers
     notify = () {

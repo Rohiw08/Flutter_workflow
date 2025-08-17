@@ -18,7 +18,7 @@ void main() {
       'text-node', (node) => TextNodeWidget(node: node));
   nodeRegistry.registerNodeType(
       'image-node', (node) => ImageNodeWidget(node: node));
-  edgeRegistry.registerEdgeType('wavy-edge', WavyEdgePainter());
+  edgeRegistry.registerEdgeType('dotted-edge', DottedEdgePainter());
 
   // --- 2. Create the controller with the registries ---
   final controller = FlowCanvasController(
@@ -178,7 +178,7 @@ class FlowCanvasDemo extends ConsumerWidget {
     // Correctly implemented custom edge
     controller.edgeManager.addEdge(FlowEdge(
       id: 'edge-3-wavy',
-      type: 'wavy-edge', // Use the registered custom type
+      type: 'dotted-edge', // Use the registered custom type
       sourceNodeId: 'image-1',
       sourceHandleId: 'bottom',
       targetNodeId: 'text-3',
@@ -199,47 +199,74 @@ class FlowCanvasDemo extends ConsumerWidget {
   }
 }
 
-// --- CUSTOM EDGE PAINTER ---
-class WavyEdgePainter extends EdgePainter {
+class DottedEdgePainter extends EdgePainter {
   @override
   void paint(Canvas canvas, Path path, FlowEdge edge, Paint paint) {
-    // This painter IGNORES the provided path and creates its own.
-    // It correctly gets the start and end points from the path metrics.
+    // Get start & end points from original path
     final pathMetrics = path.computeMetrics().first;
     final start = pathMetrics.getTangentForOffset(0)!.position;
     final end = pathMetrics.getTangentForOffset(pathMetrics.length)!.position;
 
-    final wavyPath = Path();
-    wavyPath.moveTo(start.dx, start.dy);
-    wavyPath.cubicTo(
-      start.dx + 80, start.dy - 120, // Control point 1
-      end.dx - 80, end.dy + 120, // Control point 2
-      end.dx, end.dy, // End point
-    );
+    // Build a smooth cubic curve path
+    final curvePath = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(
+        start.dx + 80, start.dy - 120, // control point 1
+        end.dx - 80, end.dy + 120, // control point 2
+        end.dx, end.dy, // end point
+      );
 
-    canvas.drawPath(wavyPath, paint..strokeWidth = 2.5);
+    // ---- Draw dotted line ----
+    const double dotSpacing = 8.0;
+    const double dotRadius = 2.5;
 
-    // It can also have a label, just like a default edge
+    for (final metric in curvePath.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final pos = metric.getTangentForOffset(distance)!.position;
+        canvas.drawCircle(
+          pos,
+          dotRadius,
+          paint
+            ..style = PaintingStyle.fill
+            ..strokeWidth = 1.5,
+        );
+        distance += dotSpacing;
+      }
+    }
+
+    // ---- Optional: Label ----
     if (edge.label != null && edge.label!.isNotEmpty) {
       final textPainter = TextPainter(
-        text: TextSpan(text: edge.label, style: edge.labelStyle),
+        text: TextSpan(
+          text: edge.label,
+          style: edge.labelStyle ??
+              const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
         textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
       )..layout();
 
-      final wavyMetrics = wavyPath.computeMetrics().first;
-      final midpoint = wavyMetrics.getTangentForOffset(wavyMetrics.length / 2)!;
-      final position = midpoint.position -
-          Offset(textPainter.width / 2, textPainter.height / 2);
+      // Place label at curve midpoint
+      final metric = curvePath.computeMetrics().first;
+      final midpoint = metric.getTangentForOffset(metric.length / 2)!.position;
+      final position =
+          midpoint - Offset(textPainter.width / 2, textPainter.height / 2);
 
+      // Label background
       final bgRect = Rect.fromCenter(
-        center: midpoint.position,
+        center: midpoint,
         width: textPainter.width + 12,
         height: textPainter.height + 6,
       );
       canvas.drawRRect(
-          RRect.fromRectAndRadius(bgRect, const Radius.circular(6)),
-          Paint()..color = Colors.black.withOpacity(0.7));
+        RRect.fromRectAndRadius(bgRect, const Radius.circular(6)),
+        Paint()..color = Colors.black.withAlpha(179),
+      );
 
       textPainter.paint(canvas, position);
     }

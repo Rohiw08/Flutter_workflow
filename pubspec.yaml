@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
   flutter_riverpod: ^2.5.1
+  vector_math: ^2.1.4
   
   # This is the most important part:
   # It tells the main app to use the local package we created.

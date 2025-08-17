@@ -72,6 +72,7 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       if (mounted) {
         setState(() {
           _isInitialized = true;
+          controller.navigationManager.fitView();
         });
       }
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -202,16 +203,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
     }
   }
 
-  Size _canvasSize(FlowCanvasController controller) {
-    final size = widget.canvasSize ??
-        Size(controller.canvasWidth, controller.canvasHeight);
-    if (size.width <= 0 || size.height <= 0) {
-      debugPrint('Invalid canvas size: $size, using fallback');
-      return const Size(5000, 5000);
-    }
-    return size;
-  }
-
   Widget _buildNode({
     required FlowCanvasController controller,
     required FlowNode node,
@@ -275,9 +266,10 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
 
   Widget _buildCanvasContent(FlowCanvasController controller) {
     final canvasContent = SizedBox(
-      width: _canvasSize(controller).width,
-      height: _canvasSize(controller).height,
+      height: controller.canvasHeight,
+      width: controller.canvasWidth,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           // Paint flow (edges, connections, etc.)
           CustomPaint(
@@ -444,10 +436,10 @@ class _InteractiveViewerWrapper extends StatelessWidget {
             key: viewerKey,
             transformationController: transformationController,
             constrained: false,
-            boundaryMargin: const EdgeInsets.all(0),
+            boundaryMargin: const EdgeInsets.all(double.infinity),
             minScale: minScale,
             maxScale: maxScale,
-            // Set to constant values - IgnorePointer handles the locking
+            clipBehavior: Clip.none,
             panEnabled: interactive,
             scaleEnabled: interactive,
             child: constantChild!,
