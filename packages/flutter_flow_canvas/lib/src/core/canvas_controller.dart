@@ -44,6 +44,9 @@ class FlowCanvasController extends ChangeNotifier {
   // Callback for notifying listeners
   late final VoidCallback notify;
 
+  // minimap
+  final Rect canvasBounds;
+
   // Public Getters from State
   List<FlowNode> get nodes => List.unmodifiable(_state.nodes);
   List<FlowEdge> get edges => List.unmodifiable(_state.edges);
@@ -60,6 +63,7 @@ class FlowCanvasController extends ChangeNotifier {
     bool enableBoxSelection = true,
     double canvasWidth = 5000,
     double canvasHeight = 5000,
+    this.canvasBounds = const Rect.fromLTWH(0, 0, 5000, 5000),
     required this.nodeRegistry,
     required this.edgeRegistry,
   }) {

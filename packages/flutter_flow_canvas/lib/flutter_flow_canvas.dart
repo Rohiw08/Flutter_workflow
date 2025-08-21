@@ -24,3 +24,6 @@ export 'src/ui/widgets/painters/background_painter.dart';
 // Registrory
 export 'src/core/state/node_registry.dart';
 export 'src/core/state/edge_registry.dart';
+
+// Theme
+export "/src/theme/theme_export.dart";

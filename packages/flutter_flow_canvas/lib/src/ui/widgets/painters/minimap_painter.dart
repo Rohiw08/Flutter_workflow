@@ -1,103 +1,201 @@
-import 'dart:math';
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
 import 'package:flutter_flow_canvas/src/core/models/minimap_transform.dart';
-import 'package:flutter_flow_canvas/src/theme/theme.dart';
-import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
+import 'package:flutter_flow_canvas/src/core/models/node.dart';
+import 'package:flutter_flow_canvas/src/theme/components/minimap_theme.dart';
+import 'package:flutter_flow_canvas/src/ui/widgets/minimap.dart';
 
+/// Enhanced MiniMap Painter with all React Flow features
 class MiniMapPainter extends CustomPainter {
   final FlowCanvasController controller;
-  final FlowCanvasTheme theme;
+  final FlowCanvasMiniMapTheme theme;
   final MiniMapNodeColorFunc? nodeColor;
   final MiniMapNodeColorFunc? nodeStrokeColor;
   final MiniMapNodeBuilder? nodeBuilder;
-
   final Size minimapSize;
+  final double offsetScale;
+
+  Picture? _cachedNodesPicture;
 
   MiniMapPainter({
     required this.controller,
+    required this.theme,
     this.nodeColor,
     this.nodeStrokeColor,
     this.nodeBuilder,
     required this.minimapSize,
-  })  : theme =
-            controller.interactiveViewerKey?.currentContext?.flowCanvasTheme ??
-                FlowCanvasTheme.light(), // Safely get theme
-        super(repaint: controller);
+    this.offsetScale = 1.0,
+  }) : super(repaint: controller);
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Original logic preserved
     if (controller.nodes.isEmpty) return;
 
-    final transform =
-        calculateTransform(controller.getNodesBounds(), minimapSize);
+    // Use canvas bounds instead of just content bounds
+    final canvasBounds = getCanvasBounds(controller);
+    final transform = calculateTransform(
+      canvasBounds,
+      minimapSize,
+      offsetScale,
+    );
+
     if (transform.scale <= 0) return;
 
-    _drawNodes(canvas, transform);
+    _drawBackground(canvas, size);
+
+    if (_cachedNodesPicture == null) {
+      final recorder = PictureRecorder();
+      final tempCanvas = Canvas(recorder);
+      _drawNodes(tempCanvas, transform); // Draw to temp
+      _cachedNodesPicture = recorder.endRecording();
+    }
+    canvas.drawPicture(_cachedNodesPicture!);
+
     _drawViewportMask(canvas, size, transform);
   }
 
+  static Rect getCanvasBounds(FlowCanvasController controller) {
+    final contentBounds = controller.getNodesBounds();
+
+    // Get current viewport size
+    final viewportSize = Size(
+      controller.interactiveViewerKey?.currentContext?.size?.width ??
+          controller.canvasWidth,
+      controller.interactiveViewerKey?.currentContext?.size?.height ??
+          controller.canvasHeight,
+    );
+
+    // Get current viewport position in canvas coordinates
+    final canvasTransform = controller.transformationController.value;
+    final canvasScale = canvasTransform.getMaxScaleOnAxis();
+    final translation = canvasTransform.getTranslation();
+
+    final currentViewport = Rect.fromLTWH(
+      -translation.x / canvasScale,
+      -translation.y / canvasScale,
+      viewportSize.width / canvasScale,
+      viewportSize.height / canvasScale,
+    );
+
+    // Combine content bounds and current viewport to get total canvas bounds
+    if (contentBounds.isEmpty) {
+      return currentViewport;
+    }
+
+    return Rect.fromLTRB(
+      math.min(contentBounds.left, currentViewport.left),
+      math.min(contentBounds.top, currentViewport.top),
+      math.max(contentBounds.right, currentViewport.right),
+      math.max(contentBounds.bottom, currentViewport.bottom),
+    );
+  }
+
+  void _drawBackground(Canvas canvas, Size size) {
+    final backgroundPaint = Paint()..color = theme.backgroundColor;
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+  }
+
   void _drawNodes(Canvas canvas, MiniMapTransform transform) {
-    // UPDATED: Use colors and properties from the hierarchical miniMap theme
-    final minimapTheme = theme.miniMap;
+    // Shared paints (created once)
 
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final strokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = theme.nodeStrokeWidth;
+    final regularFillPath = Path();
+    final regularStrokePath = Path();
+    final selectedFillPath = Path();
+    final selectedStrokePath = Path();
     for (final node in controller.nodes) {
-      // Allow override from widget, but fall back to the theme colors
+      final isSelected = node.isSelected;
       final fillColor = nodeColor?.call(node) ??
-          (node.isSelected
-              ? minimapTheme.selectedNodeColor
-              : minimapTheme.nodeColor);
-      final strokeColor =
-          nodeStrokeColor?.call(node) ?? minimapTheme.nodeStrokeColor;
-
-      final fillPaint = Paint()
-        ..color = fillColor
-        ..style = PaintingStyle.fill;
-      final strokePaint = Paint()
-        ..color = strokeColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = minimapTheme.nodeStrokeWidth;
-
+          (isSelected ? theme.selectedNodeColor : theme.nodeColor);
+      final strokeColor = nodeStrokeColor?.call(node) ?? theme.nodeStrokeColor;
       final nodeRect = getNodeRect(node, transform);
-
       if (nodeBuilder != null) {
-        // Original logic preserved
-        canvas.save();
-        canvas.translate(nodeRect.left, nodeRect.top);
-        if (node.size.width > 0 && node.size.height > 0) {
-          canvas.scale(nodeRect.width / node.size.width,
-              nodeRect.height / node.size.height);
-        }
-        final path = nodeBuilder!(node);
-        canvas.drawPath(path, fillPaint);
-        if (minimapTheme.nodeStrokeWidth > 0) {
-          canvas.drawPath(path, strokePaint);
-        }
-        canvas.restore();
+        // Reuse paints, just update color
+        fillPaint.color = fillColor;
+        strokePaint.color = strokeColor;
+        _drawCustomNode(canvas, node, nodeRect, fillPaint, strokePaint);
       } else {
-        final rrect = RRect.fromRectAndRadius(
-            nodeRect, Radius.circular(minimapTheme.borderRadius));
-        canvas.drawRRect(rrect, fillPaint);
-        if (minimapTheme.nodeStrokeWidth > 0) {
-          canvas.drawRRect(rrect, strokePaint);
+        final borderRadius = theme.nodeBorderRadius;
+        final rrect =
+            RRect.fromRectAndRadius(nodeRect, Radius.circular(borderRadius));
+        final path = Path()..addRRect(rrect);
+        if (isSelected) {
+          selectedFillPath.addPath(path, Offset.zero);
+          if (theme.nodeStrokeWidth > 0) {
+            selectedStrokePath.addPath(path, Offset.zero);
+          }
+        } else {
+          regularFillPath.addPath(path, Offset.zero);
+
+          if (theme.nodeStrokeWidth > 0) {
+            regularStrokePath.addPath(path, Offset.zero);
+          }
         }
       }
     }
+
+    // Draw batched regular nodes
+    fillPaint.color = theme.nodeColor;
+    canvas.drawPath(regularFillPath, fillPaint);
+    strokePaint.color = theme.nodeStrokeColor;
+    if (theme.nodeStrokeWidth > 0) {
+      canvas.drawPath(regularStrokePath, strokePaint);
+    }
+
+    // Draw batched selected nodes
+    fillPaint.color = theme.selectedNodeColor;
+    canvas.drawPath(selectedFillPath, fillPaint);
+    strokePaint.color = theme.nodeStrokeColor;
+    if (theme.nodeStrokeWidth > 0) {
+      canvas.drawPath(selectedStrokePath, strokePaint);
+    }
+
+    // Glow for selected nodes (reuse strokePaint)
+    if (theme.nodeStrokeWidth > 0) {
+      final glowPaint = Paint()
+        ..color = theme.selectedNodeColor.withAlpha(76)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = theme.nodeStrokeWidth * 2
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+
+      canvas.drawPath(selectedStrokePath, glowPaint);
+    }
+  }
+
+  void _drawCustomNode(Canvas canvas, FlowNode node, Rect nodeRect,
+      Paint fillPaint, Paint strokePaint) {
+    canvas.save();
+    canvas.translate(nodeRect.left, nodeRect.top);
+
+    if (node.size.width > 0 && node.size.height > 0) {
+      canvas.scale(
+        nodeRect.width / node.size.width,
+        nodeRect.height / node.size.height,
+      );
+    }
+
+    final path = nodeBuilder!(node);
+    canvas.drawPath(path, fillPaint);
+
+    if (theme.nodeStrokeWidth > 0) {
+      canvas.drawPath(path, strokePaint);
+    }
+
+    canvas.restore();
   }
 
   void _drawViewportMask(Canvas canvas, Size size, MiniMapTransform transform) {
-    // Original logic preserved
     final canvasTransform = controller.transformationController.value;
     final canvasScale = canvasTransform.getMaxScaleOnAxis();
     if (canvasScale <= 0) return;
 
-    final viewportSize = Size(
-        (controller.interactiveViewerKey?.currentContext?.size?.width ??
-            controller.canvasWidth),
-        (controller.interactiveViewerKey?.currentContext?.size?.height ??
-            controller.canvasHeight));
-
+    final viewportSize = _getViewportSize();
     final translation = canvasTransform.getTranslation();
 
     final viewportInCanvas = Rect.fromLTWH(
@@ -121,32 +219,98 @@ class MiniMapPainter extends CustomPainter {
       viewportInMiniMap.bottom.clamp(0.0, size.height),
     );
 
-    final maskPath = Path.combine(
-      PathOperation.difference,
-      Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-      Path()..addRect(clampedViewportRect),
+    // Skip if viewport has zero area after clamping
+    if (clampedViewportRect.isEmpty) return;
+
+    // Create RRect for all viewport operations (use theme for radius)
+    final viewportRRect = RRect.fromRectAndRadius(
+      clampedViewportRect,
+      Radius.circular(theme.viewportBorderRadius),
     );
 
-    // UPDATED: Use maskColor from the theme
-    canvas.drawPath(maskPath, Paint()..color = theme.miniMap.maskColor);
+    // --- Draw mask overlay with viewport hole ---
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
 
-    // UPDATED: Use maskStrokeWidth and maskStrokeColor from the theme
-    final maskStrokeWidth = theme.miniMap.maskStrokeWidth;
-    if (maskStrokeWidth > 0) {
-      canvas.drawRect(
-        clampedViewportRect,
-        Paint()
-          ..color = theme.miniMap.maskStrokeColor
-          ..strokeWidth = maskStrokeWidth
-          ..style = PaintingStyle.stroke,
-      );
+    // Draw full tinted overlay
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = theme.maskColor,
+    );
+
+    // Punch out the viewport (transparent hole)
+    canvas.drawRect(
+      clampedViewportRect,
+      Paint()..blendMode = BlendMode.clear,
+    );
+
+    canvas.restore();
+
+    // --- Fill viewport with inner color (NEW) ---
+    if (theme.viewportInnerColor != Colors.transparent &&
+        theme.viewportInnerColor.a > 0) {
+      final innerColorPaint = Paint()
+        ..color = theme.viewportInnerColor
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(viewportRRect, innerColorPaint);
+    }
+
+    // --- Border styling around viewport ---
+    if (theme.maskStrokeWidth > 0) {
+      final borderPaint = Paint()
+        ..color = theme.maskStrokeColor
+        ..strokeWidth = theme.maskStrokeWidth
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawRRect(viewportRRect, borderPaint);
+    }
+
+    // --- Inner glow effect ---
+    if (theme.viewportInnerGlowColor.a > 0) {
+      double glowWidth =
+          theme.maskStrokeWidth * theme.viewportInnerGlowWidthMultiplier;
+      if (glowWidth <= 0) {
+        // Fallback for when border is off but glow is desired
+        glowWidth = theme.viewportInnerGlowWidthMultiplier;
+      }
+
+      final innerGlowPaint = Paint()
+        ..color = theme.viewportInnerGlowColor
+        ..strokeWidth = glowWidth
+        ..style = PaintingStyle.stroke
+        ..maskFilter = theme.viewportInnerGlowBlur > 0
+            ? MaskFilter.blur(BlurStyle.normal, theme.viewportInnerGlowBlur)
+            : null;
+
+      // Clip to viewport to make glow "inner" (blur spills only inside the hole)
+      canvas.save();
+      canvas.clipRRect(viewportRRect);
+      canvas.drawRRect(viewportRRect, innerGlowPaint);
+      canvas.restore();
     }
   }
 
-  @override
-  bool shouldRepaint(MiniMapPainter oldDelegate) => true;
+  Size _getViewportSize() {
+    return Size(
+      controller.interactiveViewerKey?.currentContext?.size?.width ??
+          controller.canvasWidth,
+      controller.interactiveViewerKey?.currentContext?.size?.height ??
+          controller.canvasHeight,
+    );
+  }
 
-  // Static Helper Methods are unchanged as they are not theme-related.
+  @override
+  bool shouldRepaint(MiniMapPainter oldDelegate) {
+    return oldDelegate.controller != controller ||
+        oldDelegate.theme != theme ||
+        oldDelegate.nodeColor != nodeColor || // Function identity
+        oldDelegate.nodeStrokeColor != nodeStrokeColor ||
+        oldDelegate.nodeBuilder != nodeBuilder ||
+        oldDelegate.minimapSize != minimapSize ||
+        oldDelegate.offsetScale != offsetScale;
+  }
+
+  // Static Helper Methods
   static Rect getNodeRect(FlowNode node, MiniMapTransform transform) {
     return Rect.fromLTWH(
       node.position.dx * transform.scale + transform.offsetX,
@@ -166,38 +330,58 @@ class MiniMapPainter extends CustomPainter {
   }
 
   static MiniMapTransform calculateTransform(
-      Rect contentBounds, Size minimapSize) {
-    if (contentBounds.isEmpty) {
+    Rect canvasBounds,
+    Size minimapSize,
+    double offsetScale,
+  ) {
+    if (canvasBounds.isEmpty) {
       return MiniMapTransform(
-          scale: 1.0, offsetX: 0.0, offsetY: 0.0, contentBounds: contentBounds);
+        scale: 1.0 * offsetScale,
+        offsetX: 0.0,
+        offsetY: 0.0,
+        contentBounds: canvasBounds,
+      );
     }
 
     const padding = 10.0;
     final availableWidth = minimapSize.width - 2 * padding;
     final availableHeight = minimapSize.height - 2 * padding;
 
-    if (contentBounds.width <= 0 || contentBounds.height <= 0) {
+    if (canvasBounds.width <= 0 || canvasBounds.height <= 0) {
       return MiniMapTransform(
-          scale: 0, offsetX: 0, offsetY: 0, contentBounds: contentBounds);
+        scale: 0,
+        offsetX: 0,
+        offsetY: 0,
+        contentBounds: canvasBounds,
+      );
     }
 
-    final scaleX = availableWidth / contentBounds.width;
-    final scaleY = availableHeight / contentBounds.height;
-    final scale = min(scaleX, scaleY);
+    final scaleX = availableWidth / canvasBounds.width;
+    final scaleY = availableHeight / canvasBounds.height;
+    final scale = math.min(scaleX, scaleY) * offsetScale;
 
-    final scaledContentWidth = contentBounds.width * scale;
-    final scaledContentHeight = contentBounds.height * scale;
+    final scaledContentWidth = canvasBounds.width * scale;
+    final scaledContentHeight = canvasBounds.height * scale;
 
     final offsetX = (minimapSize.width - scaledContentWidth) / 2 -
-        contentBounds.left * scale;
+        canvasBounds.left * scale;
     final offsetY = (minimapSize.height - scaledContentHeight) / 2 -
-        contentBounds.top * scale;
+        canvasBounds.top * scale;
+
+    if (availableWidth <= 0 || availableHeight <= 0) {
+      return MiniMapTransform(
+        scale: 0,
+        offsetX: 0,
+        offsetY: 0,
+        contentBounds: canvasBounds,
+      );
+    }
 
     return MiniMapTransform(
       scale: scale,
       offsetX: offsetX,
       offsetY: offsetY,
-      contentBounds: contentBounds,
+      contentBounds: canvasBounds,
     );
   }
 }

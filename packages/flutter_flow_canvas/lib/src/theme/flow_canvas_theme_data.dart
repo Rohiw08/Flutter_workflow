@@ -13,7 +13,7 @@ class FlowCanvasThemes {
       background: baseTheme.background.copyWith(
         backgroundColor: const Color(0xFFFBFBFB),
         patternColor: const Color(0xFFE8E8E8),
-        variant: BackgroundVariant.lines,
+        variant: BackgroundVariant.grid,
       ),
       node: baseTheme.node.copyWith(
         defaultBackgroundColor: const Color(0xFFFEFEFE),
@@ -38,7 +38,7 @@ class FlowCanvasThemes {
       background: baseTheme.background.copyWith(
         backgroundColor: const Color(0xFF18181B),
         patternColor: const Color(0xFF2A2A2A),
-        variant: BackgroundVariant.lines,
+        variant: BackgroundVariant.grid,
       ),
       node: baseTheme.node.copyWith(
         defaultBackgroundColor: const Color(0xFF27272A),
@@ -120,7 +120,7 @@ class FlowCanvasThemes {
       background: baseTheme.background.copyWith(
         backgroundColor: const Color(0xFFF0FDF4),
         patternColor: const Color(0xFFBBF7D0),
-        variant: BackgroundVariant.lines,
+        variant: BackgroundVariant.grid,
       ),
       node: baseTheme.node.copyWith(
         defaultBorderColor: const Color(0xFF22C55E),

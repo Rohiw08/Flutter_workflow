@@ -5,6 +5,7 @@ import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
 import 'package:flutter_flow_canvas/src/core/enums.dart';
 import 'package:flutter_flow_canvas/src/core/providers.dart';
 import 'package:flutter_flow_canvas/src/core/models/node.dart';
+import 'package:flutter_flow_canvas/src/theme/theme.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/flow_canvas_controls.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'painters/background_painter.dart';
@@ -14,6 +15,7 @@ class FlowCanvas extends ConsumerStatefulWidget {
   // Styling overrides
   final BackgroundVariant? backgroundVariant;
   final Color? backgroundColor;
+  final FlowCanvasTheme? theme;
 
   // Behavior
   final bool showControls;
@@ -25,6 +27,7 @@ class FlowCanvas extends ConsumerStatefulWidget {
 
   const FlowCanvas({
     super.key,
+    this.theme,
     this.backgroundVariant,
     this.showControls = true,
     this.backgroundColor,
@@ -374,8 +377,8 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
                 painter: FlowCanvasBackgroundPainter.fromContext(
                   context,
                   controller.transformationController.value,
-                  patternOverride: widget.backgroundVariant,
-                  backgroundColorOverride: widget.backgroundColor,
+                  pattern: widget.backgroundVariant,
+                  backgroundColor: widget.backgroundColor,
                 ),
               ),
             ),

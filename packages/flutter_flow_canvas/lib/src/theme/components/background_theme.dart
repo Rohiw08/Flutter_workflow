@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'dart:ui';
 
-class FlowCanvasBackgroundTheme {
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
+
+class FlowCanvasBackgroundTheme
+    extends ThemeExtension<FlowCanvasBackgroundTheme> {
   final Color backgroundColor;
   final BackgroundVariant variant;
   final Color patternColor;
@@ -12,11 +16,9 @@ class FlowCanvasBackgroundTheme {
   final bool fadeOnZoom;
   final Gradient? gradient;
   final Offset patternOffset;
-
-  // Enhanced properties
   final BlendMode? blendMode;
   final double opacity;
-  final List<Color>? alternateColors; // For complex patterns
+  final List<Color>? alternateColors;
 
   const FlowCanvasBackgroundTheme({
     required this.backgroundColor,
@@ -58,7 +60,6 @@ class FlowCanvasBackgroundTheme {
     );
   }
 
-  /// Create animated gradient background
   factory FlowCanvasBackgroundTheme.animatedGradient({
     required List<Color> colors,
     BackgroundVariant variant = BackgroundVariant.none,
@@ -74,6 +75,7 @@ class FlowCanvasBackgroundTheme {
     );
   }
 
+  @override
   FlowCanvasBackgroundTheme copyWith({
     Color? backgroundColor,
     BackgroundVariant? variant,
@@ -107,38 +109,61 @@ class FlowCanvasBackgroundTheme {
   }
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is FlowCanvasBackgroundTheme &&
-        other.backgroundColor == backgroundColor &&
-        other.variant == variant &&
-        other.patternColor == patternColor &&
-        other.gap == gap &&
-        other.lineWidth == lineWidth &&
-        other.dotRadius == dotRadius &&
-        other.crossSize == crossSize &&
-        other.fadeOnZoom == fadeOnZoom &&
-        other.gradient == gradient &&
-        other.patternOffset == patternOffset &&
-        other.blendMode == blendMode &&
-        other.opacity == opacity;
+  FlowCanvasBackgroundTheme lerp(
+      ThemeExtension<FlowCanvasBackgroundTheme>? other, double t) {
+    if (other is! FlowCanvasBackgroundTheme) return this;
+    return FlowCanvasBackgroundTheme(
+      backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t)!,
+      variant: t < 0.5 ? variant : other.variant, // Discrete switch
+      patternColor: Color.lerp(patternColor, other.patternColor, t)!,
+      gap: lerpDouble(gap, other.gap, t)!,
+      lineWidth: lerpDouble(lineWidth, other.lineWidth, t)!,
+      dotRadius: lerpDouble(dotRadius, other.dotRadius, t),
+      crossSize: lerpDouble(crossSize, other.crossSize, t),
+      fadeOnZoom: t < 0.5 ? fadeOnZoom : other.fadeOnZoom,
+      gradient: Gradient.lerp(gradient, other.gradient, t),
+      patternOffset:
+          Offset.lerp(patternOffset, other.patternOffset, t) ?? Offset.zero,
+      blendMode: t < 0.5 ? blendMode : other.blendMode,
+      opacity: lerpDouble(opacity, other.opacity, t)!,
+      alternateColors:
+          t < 0.5 ? alternateColors : other.alternateColors, // Simplified
+    );
   }
 
   @override
-  int get hashCode {
-    return Object.hash(
-      backgroundColor,
-      variant,
-      patternColor,
-      gap,
-      lineWidth,
-      dotRadius,
-      crossSize,
-      fadeOnZoom,
-      gradient,
-      patternOffset,
-      blendMode,
-      opacity,
-    );
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is FlowCanvasBackgroundTheme &&
+        backgroundColor == other.backgroundColor &&
+        variant == other.variant &&
+        patternColor == other.patternColor &&
+        gap == other.gap &&
+        lineWidth == other.lineWidth &&
+        dotRadius == other.dotRadius &&
+        crossSize == other.crossSize &&
+        fadeOnZoom == other.fadeOnZoom &&
+        gradient == other.gradient &&
+        patternOffset == other.patternOffset &&
+        blendMode == other.blendMode &&
+        opacity == other.opacity &&
+        listEquals(alternateColors, other.alternateColors);
   }
+
+  @override
+  int get hashCode => Object.hash(
+        backgroundColor,
+        variant,
+        patternColor,
+        gap,
+        lineWidth,
+        dotRadius,
+        crossSize,
+        fadeOnZoom,
+        gradient,
+        patternOffset,
+        blendMode,
+        opacity,
+        Object.hashAll(alternateColors ?? []),
+      );
 }

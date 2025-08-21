@@ -31,8 +31,7 @@ class NodeManager {
       throw ArgumentError(
           'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding the node.');
     }
-
-    // Just add the node directly. Its position is an absolute world coordinate.
+    node.position += Offset(_state.canvasWidth / 2, _state.canvasHeight / 2);
     _state.nodes.add(node);
     _notify();
   }
@@ -47,7 +46,7 @@ class NodeManager {
         throw ArgumentError(
             'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding nodes.');
       }
-      node.position += Offset(_state.canvasWidth / 2, _state.canvasWidth / 2);
+      node.position += Offset(_state.canvasWidth / 2, _state.canvasHeight / 2);
       _state.nodes.add(node);
     }
     _notify();

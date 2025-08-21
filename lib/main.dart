@@ -62,32 +62,43 @@ class FlowCanvasDemo extends ConsumerWidget {
     final controller = ref.watch(flowControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Flutter Flow Canvas Demo'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            onPressed: () => _addRandomNode(controller),
-            tooltip: 'Add Random Node',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined),
-            onPressed: controller.clear,
-            tooltip: 'Clear Canvas',
-          ),
-        ],
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Flutter Flow Canvas Demo'),
+      //   actions: [
+      //     IconButton(
+      //       icon: const Icon(Icons.add_circle_outline),
+      //       onPressed: () => _addRandomNode(controller),
+      //       tooltip: 'Add Random Node',
+      //     ),
+      //     IconButton(
+      //       icon: const Icon(Icons.delete_sweep_outlined),
+      //       onPressed: controller.clear,
+      //       tooltip: 'Clear Canvas',
+      //     ),
+      //   ],
+      // ),
       body: Stack(
         children: [
           FlowCanvas(
             backgroundVariant: BackgroundVariant.dots,
+
             showControls: true,
             // --- 4. Use onCanvasInit to set up the initial graph ---
             onCanvasInit: (controller) {
               _addSampleGraph(controller);
             },
           ),
-          const MiniMap()
+          FlowCanvasMiniMap(
+            theme: FlowCanvasMiniMapTheme.light().copyWith(
+              shadows: [],
+              viewportInnerGlowColor: Colors.blue
+                  .withAlpha(128), // Add some transparency for visibility
+              viewportInnerGlowWidthMultiplier:
+                  3.0, // Increase multiplier for visibility
+              viewportInnerGlowBlur: 2.0, // Add some blur for glow effect
+              maskStrokeWidth: 0, // Keep stroke width at 0 as intended
+            ),
+          )
         ],
       ),
     );
@@ -100,9 +111,9 @@ class FlowCanvasDemo extends ConsumerWidget {
 
     final node = FlowNode(
       id: id,
-      position: Offset(
-        random.nextDouble() * 800 + 100,
-        random.nextDouble() * 500 + 100,
+      position: const Offset(
+        150,
+        200,
       ),
       size: isTextNode ? const Size(220, 120) : const Size(180, 150),
       type: isTextNode ? 'text-node' : 'image-node',
