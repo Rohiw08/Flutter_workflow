@@ -11,12 +11,11 @@ export 'src/core/models/edge_painter.dart';
 
 // UI widgets
 export 'src/ui/widgets/flow_canvas.dart';
-export 'src/ui/widgets/minimap.dart';
+export 'src/ui/widgets/flow_minimap.dart';
 export 'src/ui/widgets/handle.dart';
 export 'src/ui/widgets/flow_canvas_controls.dart';
-
-// UI helpers
-export 'src/ui/widgets/helper/alignment_helper.dart';
+export 'src/ui/widgets/control_button.dart';
+export 'src/ui/widgets/flow_background.dart';
 
 // Painters
 export 'src/ui/widgets/painters/background_painter.dart';

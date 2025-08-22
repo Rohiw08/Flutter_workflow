@@ -5,7 +5,7 @@ import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
 import 'package:flutter_flow_canvas/src/core/models/minimap_transform.dart';
 import 'package:flutter_flow_canvas/src/core/models/node.dart';
 import 'package:flutter_flow_canvas/src/theme/components/minimap_theme.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/minimap.dart';
+import 'package:flutter_flow_canvas/src/ui/widgets/flow_minimap.dart';
 
 /// Enhanced MiniMap Painter with all React Flow features
 class MiniMapPainter extends CustomPainter {

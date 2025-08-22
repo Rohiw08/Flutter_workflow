@@ -6,19 +6,13 @@ import 'package:flutter_flow_canvas/src/core/enums.dart';
 import 'package:flutter_flow_canvas/src/core/providers.dart';
 import 'package:flutter_flow_canvas/src/core/models/node.dart';
 import 'package:flutter_flow_canvas/src/theme/theme.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/flow_canvas_controls.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'painters/background_painter.dart';
 import 'painters/flow_painter.dart';
 
 class FlowCanvas extends ConsumerStatefulWidget {
-  // Styling overrides
-  final BackgroundVariant? backgroundVariant;
-  final Color? backgroundColor;
   final FlowCanvasTheme? theme;
 
   // Behavior
-  final bool showControls;
   final double minScale;
   final double maxScale;
   final bool interactive;
@@ -28,9 +22,6 @@ class FlowCanvas extends ConsumerStatefulWidget {
   const FlowCanvas({
     super.key,
     this.theme,
-    this.backgroundVariant,
-    this.showControls = true,
-    this.backgroundColor,
     this.minScale = 0.1,
     this.maxScale = 2.0,
     this.interactive = true,
@@ -43,8 +34,6 @@ class FlowCanvas extends ConsumerStatefulWidget {
 }
 
 class _FlowCanvasState extends ConsumerState<FlowCanvas> {
-  // All internal state and lifecycle methods (_focusNode, _nodeKeys, initState, etc.)
-  // remain completely unchanged as they are not directly theme-related.
   final FocusNode _focusNode = FocusNode();
   final Map<String, GlobalKey> _nodeKeys = {};
   final GlobalKey _interactiveViewerKey = GlobalKey();
@@ -244,7 +233,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         );
       }
 
-      // SIMPLIFIED: Remove lock check since IgnorePointer handles it
       if (isInteractive && node.isDraggable) {
         finalWidget = GestureDetector(
           onTap: node.isSelectable
@@ -274,23 +262,19 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Paint flow (edges, connections, etc.)
           CustomPaint(
             size: Size(controller.canvasWidth, controller.canvasHeight),
             painter: FlowPainter(controller: controller),
           ),
-
-          // Your existing node rendering logic...
           if (_isInitialized) ...[
             ...controller.nodes.map(
               (node) => _buildNode(
                 controller: controller,
                 node: node,
-                isInteractive: widget.interactive, // Removed lock check
+                isInteractive: widget.interactive,
                 isForCapture: false,
               ),
             ),
-            // ... rest of your node logic
           ] else ...[
             const Center(
               child: SizedBox(
@@ -332,7 +316,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   Widget _buildInteractiveCanvas(FlowCanvasController controller) {
-    // This method's logic is unchanged.
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: (node, event) {
@@ -356,7 +339,6 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
   }
 
   Widget _buildStaticCanvas(FlowCanvasController controller) {
-    // This method's logic is unchanged.
     return _buildCanvasContent(controller);
   }
 
@@ -369,40 +351,20 @@ class _FlowCanvasState extends ConsumerState<FlowCanvas> {
         _scheduleUpdateNodeKeys(controller);
       }
 
-      return Stack(
-        children: [
-          if (widget.interactive)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: FlowCanvasBackgroundPainter.fromContext(
-                  context,
-                  controller.transformationController.value,
-                  pattern: widget.backgroundVariant,
-                  backgroundColor: widget.backgroundColor,
-                ),
-              ),
-            ),
-          if (widget.interactive)
-            _buildInteractiveCanvas(controller)
-          else
-            _buildStaticCanvas(controller),
-          if (widget.showControls && _isInitialized)
-            const FlowCanvasControls(
-              alignment: ControlPanelAlignment.bottomLeft,
-              orientation: Axis.vertical,
-            ),
-        ],
-      );
+      // REFACTORED: The Stack and controls are removed from this widget.
+      // The user is now responsible for composing them in their own UI.
+      if (widget.interactive) {
+        return _buildInteractiveCanvas(controller);
+      } else {
+        return _buildStaticCanvas(controller);
+      }
     } catch (e) {
       debugPrint('Error building FlowCanvas: $e');
-      return Container(
-        color: widget.backgroundColor ?? Colors.grey.shade100,
-        child: const Center(
-          child: Text(
-            'Canvas Error\nCheck console for details',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.red),
-          ),
+      return const Center(
+        child: Text(
+          'Canvas Error\nCheck console for details',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.red),
         ),
       );
     }
@@ -434,7 +396,7 @@ class _InteractiveViewerWrapper extends StatelessWidget {
       valueListenable: controller.navigationManager.lockState,
       builder: (context, isLocked, constantChild) {
         return IgnorePointer(
-          ignoring: isLocked, // This handles all locking logic
+          ignoring: isLocked,
           child: InteractiveViewer(
             key: viewerKey,
             transformationController: transformationController,

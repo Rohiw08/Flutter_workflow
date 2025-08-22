@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Holds the state for a connection that is currently being dragged by the user.
 class FlowConnectionState {
   final String fromNodeId;
   final String fromHandleId;
   final Offset startPosition;
-  Offset endPosition; // Made non-final to allow updates
-  String? hoveredTargetKey; // Made non-final to allow updates
+  Offset endPosition;
+  String? hoveredTargetKey;
+  bool isValid = false;
 
   FlowConnectionState({
     required this.fromNodeId,
@@ -14,5 +14,6 @@ class FlowConnectionState {
     required this.startPosition,
     required this.endPosition,
     this.hoveredTargetKey,
+    this.isValid = false,
   });
 }

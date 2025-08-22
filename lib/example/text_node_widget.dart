@@ -73,7 +73,6 @@ class TextNodeWidget extends StatelessWidget {
             id: 'left',
             position: HandlePosition.left,
             type: HandleType.target,
-            size: 10.0,
           ),
 
           // Right handle (output)
@@ -82,7 +81,6 @@ class TextNodeWidget extends StatelessWidget {
             id: 'right',
             position: HandlePosition.right,
             type: HandleType.source,
-            size: 10.0,
           ),
 
           // Top handle (input)
@@ -91,7 +89,6 @@ class TextNodeWidget extends StatelessWidget {
             id: 'top',
             position: HandlePosition.top,
             type: HandleType.target,
-            size: 10.0,
           ),
 
           // Bottom handle (output)
@@ -100,7 +97,6 @@ class TextNodeWidget extends StatelessWidget {
             id: 'bottom',
             position: HandlePosition.bottom,
             type: HandleType.source,
-            size: 10.0,
           ),
         ],
       ),

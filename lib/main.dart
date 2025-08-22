@@ -59,7 +59,7 @@ class FlowCanvasDemo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(flowControllerProvider);
+    ref.watch(flowControllerProvider);
 
     return Scaffold(
       // appBar: AppBar(
@@ -79,11 +79,8 @@ class FlowCanvasDemo extends ConsumerWidget {
       // ),
       body: Stack(
         children: [
+          const FlowBackground(),
           FlowCanvas(
-            backgroundVariant: BackgroundVariant.dots,
-
-            showControls: true,
-            // --- 4. Use onCanvasInit to set up the initial graph ---
             onCanvasInit: (controller) {
               _addSampleGraph(controller);
             },
@@ -98,7 +95,17 @@ class FlowCanvasDemo extends ConsumerWidget {
               viewportInnerGlowBlur: 2.0, // Add some blur for glow effect
               maskStrokeWidth: 0, // Keep stroke width at 0 as intended
             ),
-          )
+          ),
+          FlowCanvasControls(
+            additionalActions: [
+              FlowCanvasControlAction(
+                icon: Icons.upgrade,
+                onPressed: () => print("hellow"),
+              ),
+            ],
+            showZoom: true,
+            orientation: Axis.vertical,
+          ),
         ],
       ),
     );

@@ -65,26 +65,8 @@ class ConnectionManager {
 
       return renderBox.localToGlobal(Offset(size.width / 2, size.height / 2));
     } catch (e) {
-      // Catching the error prevents the crash. The edge will not be drawn for this frame.
-      // This is a safe fallback for this specific timing issue.
-      // debugPrint('Safely handled error getting handle position for $nodeId/$handleId: $e');
       return null;
     }
-  }
-
-  Handle? _getHandleWidget(String nodeId, String handleId) {
-    final key = _state.handleRegistry['$nodeId/$handleId'];
-    return key?.currentWidget as Handle?;
-  }
-
-  int getConnectionCount(String nodeId, String handleId) {
-    // Assuming _edgeManager has a method to get edges connected to a handle
-    // Implement based on your EdgeManager logic, e.g., filter edges where source or target matches
-    return _edgeManager.edges
-        .where((edge) =>
-            (edge.sourceNodeId == nodeId && edge.sourceHandleId == handleId) ||
-            (edge.targetNodeId == nodeId && edge.targetHandleId == handleId))
-        .length;
   }
 
   // === CONNECTION MANAGEMENT ===
@@ -145,86 +127,29 @@ class ConnectionManager {
   }
 
   void endConnection() {
-    if (_state.connection?.hoveredTargetKey == null) {
-      _cancelConnectionInternal();
-      return;
-    }
+    if (_state.connection?.hoveredTargetKey != null) {
+      try {
+        final targetKeyParts = _state.connection!.hoveredTargetKey!.split('/');
 
-    try {
-      final targetKeyParts = _state.connection!.hoveredTargetKey!.split('/');
-
-      if (targetKeyParts.length != 2) {
-        debugPrint(
-            'Invalid target key format: ${_state.connection!.hoveredTargetKey}');
-        _cancelConnectionInternal();
-        return;
-      }
-
-      final sourceNodeId = _state.connection!.fromNodeId;
-      final sourceHandleId = _state.connection!.fromHandleId;
-      final targetNodeId = targetKeyParts[0];
-      final targetHandleId = targetKeyParts[1];
-
-      // Get source and target handles
-      final sourceHandle = _getHandleWidget(sourceNodeId, sourceHandleId);
-      final targetHandle = _getHandleWidget(targetNodeId, targetHandleId);
-
-      if (sourceHandle == null || targetHandle == null) {
-        debugPrint('Missing source or target handle widget');
-        _cancelConnectionInternal();
-        return;
-      }
-
-      // Validate connection using target's onValidateConnection
-      final isValid = targetHandle.onValidateConnection?.call(
-            sourceNodeId,
-            sourceHandleId,
-            targetNodeId,
-            targetHandleId,
-          ) ??
-          true;
-
-      if (!isValid) {
-        debugPrint('Invalid connection: validation failed');
-        _cancelConnectionInternal();
-        return;
-      }
-
-      // Check maxConnections on source
-      final sourceConnectable =
-          sourceHandle.connectable ?? const HandleConnectable();
-      if (sourceConnectable.maxConnections != null) {
-        final sourceCount = getConnectionCount(sourceNodeId, sourceHandleId);
-        if (sourceCount >= sourceConnectable.maxConnections!) {
-          debugPrint('Max connections reached for source handle');
+        if (targetKeyParts.length != 2) {
+          debugPrint(
+              'Invalid target key format: ${_state.connection!.hoveredTargetKey}');
           _cancelConnectionInternal();
           return;
         }
+
+        final newEdge = FlowEdge(
+          id: _generateUniqueEdgeId(),
+          sourceNodeId: _state.connection!.fromNodeId,
+          sourceHandleId: _state.connection!.fromHandleId,
+          targetNodeId: targetKeyParts[0],
+          targetHandleId: targetKeyParts[1],
+        );
+
+        _edgeManager.addEdge(newEdge);
+      } catch (e) {
+        debugPrint('Error creating edge: $e');
       }
-
-      // Check maxConnections on target
-      final targetConnectable =
-          targetHandle.connectable ?? const HandleConnectable();
-      if (targetConnectable.maxConnections != null) {
-        final targetCount = getConnectionCount(targetNodeId, targetHandleId);
-        if (targetCount >= targetConnectable.maxConnections!) {
-          debugPrint('Max connections reached for target handle');
-          _cancelConnectionInternal();
-          return;
-        }
-      }
-
-      final newEdge = FlowEdge(
-        id: _generateUniqueEdgeId(),
-        sourceNodeId: sourceNodeId,
-        sourceHandleId: sourceHandleId,
-        targetNodeId: targetNodeId,
-        targetHandleId: targetHandleId,
-      );
-
-      _edgeManager.addEdge(newEdge);
-    } catch (e) {
-      debugPrint('Error creating edge: $e');
     }
 
     _cancelConnectionInternal();

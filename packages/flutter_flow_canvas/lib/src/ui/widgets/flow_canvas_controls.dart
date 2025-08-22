@@ -1,42 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_canvas/src/core/managers/navigation_manager.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/control_button.dart';
-import 'package:flutter_flow_canvas/src/ui/widgets/controllers_divider.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/helper/default_action_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
-import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
 class FlowCanvasControls extends ConsumerWidget {
-  final bool showDefaultActions;
+  final bool showZoom; // New: Granular visibility for zoom buttons
+  final bool showFitView; // New: Granular visibility for fit view
+  final bool showLock; // New: Granular visibility for lock
   final List<FlowCanvasControlAction> additionalActions;
+  final List<Widget> children; // New: Allow arbitrary custom widgets
   final Axis orientation;
-  final ControlPanelAlignment alignment;
+  final Alignment alignment;
+  final FlowCanvasControlTheme? controlsTheme;
   final double buttonSize;
+  final Color? backgroundColor;
+  final Color? buttonColor;
+  final Color? iconColor;
 
   const FlowCanvasControls({
     super.key,
-    this.showDefaultActions = true,
+    this.showZoom = true,
+    this.showFitView = true,
+    this.showLock = true,
     this.additionalActions = const [],
+    this.children = const [], // New: Default empty list for custom children
     this.orientation = Axis.vertical,
-    this.alignment = ControlPanelAlignment.bottomRight,
+    this.alignment = Alignment.bottomLeft,
     this.buttonSize = 32.0,
+    this.controlsTheme,
+    this.backgroundColor,
+    this.buttonColor,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(flowControllerProvider);
-    final controlsTheme = context.flowCanvasTheme.controls;
 
-    final defaultActions = showDefaultActions
-        ? DefaultActionsHelper.getDefaultActions(controller.navigationManager)
-        : <FlowCanvasControlAction>[];
+    final baseTheme = context.flowCanvasTheme.controls;
+    final themeFromPrecedence = controlsTheme ?? baseTheme;
 
-    // Find the original lock action provided by the helper
-    final lockActionIndex = defaultActions.indexWhere((action) =>
-        action.onPressed == controller.navigationManager.toggleLock);
+    final finalControlsTheme = themeFromPrecedence.copyWith(
+      backgroundColor: backgroundColor ?? themeFromPrecedence.backgroundColor,
+      buttonColor: buttonColor ?? themeFromPrecedence.buttonColor,
+      iconColor: iconColor ?? themeFromPrecedence.iconColor,
+    );
 
-    // If found, replace it with a builder that creates our reactive widget
+    final defaultActions = DefaultActionsHelper.getDefaultActions(
+      controller.navigationManager,
+      showZoom: showZoom,
+      showFitView: showFitView,
+      showLock: showLock,
+    );
+
+    // Replace lock action with reactive builder if shown
+    final lockActionIndex = defaultActions.indexWhere(
+      (action) => action.onPressed == controller.navigationManager.toggleLock,
+    );
+
     if (lockActionIndex != -1) {
       defaultActions[lockActionIndex] = FlowCanvasControlAction(
         builder: (context) => _LockControlButton(
@@ -46,50 +68,77 @@ class FlowCanvasControls extends ConsumerWidget {
       );
     }
 
-    final List<Widget> children = [];
+    final List<Widget> panelChildren = [];
 
     void addActions(List<FlowCanvasControlAction> actions) {
       for (int i = 0; i < actions.length; i++) {
-        children.add(ControlButton(
+        panelChildren.add(ControlButton(
           action: actions[i],
           size: buttonSize,
+          theme: finalControlsTheme,
         ));
         if (i < actions.length - 1) {
-          children.add(ControlDivider(orientation: orientation));
+          panelChildren.add(ControlDivider(
+            orientation: orientation,
+            theme: finalControlsTheme,
+          ));
         }
       }
     }
 
     if (defaultActions.isNotEmpty) addActions(defaultActions);
 
-    if (defaultActions.isNotEmpty && additionalActions.isNotEmpty) {
-      children.add(SectionDivider(orientation: orientation));
+    if (defaultActions.isNotEmpty &&
+        (additionalActions.isNotEmpty || children.isNotEmpty)) {
+      panelChildren.add(SectionDivider(
+        orientation: orientation,
+        theme: finalControlsTheme,
+      ));
     }
 
     if (additionalActions.isNotEmpty) addActions(additionalActions);
 
-    if (children.isEmpty) return const SizedBox.shrink();
+    if (additionalActions.isNotEmpty && children.isNotEmpty) {
+      panelChildren.add(SectionDivider(
+        orientation: orientation,
+        theme: finalControlsTheme,
+      ));
+    }
 
+    if (children.isNotEmpty) {
+      panelChildren.addAll(children); // Add custom widgets at the end
+    }
+
+    if (panelChildren.isEmpty) return const SizedBox.shrink();
+
+    // -----------------------------
+    // Panel UI
+    // -----------------------------
     final panel = Container(
-      padding: controlsTheme.padding,
+      padding: finalControlsTheme.padding,
       decoration: BoxDecoration(
-        color: controlsTheme.backgroundColor,
-        borderRadius: controlsTheme.borderRadius,
-        boxShadow: controlsTheme.shadows,
-        border: Border.all(color: controlsTheme.dividerColor, width: 1),
+        color: finalControlsTheme.backgroundColor,
+        borderRadius: finalControlsTheme.borderRadius,
+        boxShadow: finalControlsTheme.shadows,
+        border: Border.all(
+          color: finalControlsTheme.dividerColor,
+          width: 1,
+        ),
       ),
       child: Flex(
         direction: orientation,
         mainAxisSize: MainAxisSize.min,
-        children: children,
+        children: panelChildren,
       ),
     );
 
-    final constrainedPanel =
-        orientation == Axis.vertical ? IntrinsicWidth(child: panel) : panel;
+    final constrainedPanel = orientation == Axis.vertical
+        ? IntrinsicWidth(child: panel)
+        : IntrinsicHeight(
+            child: panel); // New: Add IntrinsicHeight for horizontal mode
 
     return Align(
-      alignment: AlignmentHelper.getAlignment(alignment),
+      alignment: alignment,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: constrainedPanel,
@@ -98,8 +147,6 @@ class FlowCanvasControls extends ConsumerWidget {
   }
 }
 
-// --- START: NEW REACTIVE WIDGET ---
-/// A self-contained, reactive button for the lock/unlock functionality.
 class _LockControlButton extends StatefulWidget {
   final NavigationManager navigationManager;
   final double size;
@@ -120,40 +167,41 @@ class _LockControlButtonState extends State<_LockControlButton> {
   Widget build(BuildContext context) {
     final controlsTheme = context.flowCanvasTheme.controls;
 
-    // Listen to the lock state directly from the manager
     return ValueListenableBuilder<bool>(
       valueListenable: widget.navigationManager.lockState,
       builder: (context, isLocked, child) {
-        // Determine colors based on hover state
         final buttonColor = _isHovered
             ? controlsTheme.buttonHoverColor
             : controlsTheme.buttonColor;
         final iconColor =
             _isHovered ? controlsTheme.iconHoverColor : controlsTheme.iconColor;
 
-        // This widget replicates the style of ControlButton but with reactive data
-        return Tooltip(
-          message: isLocked ? 'Unlock View' : 'Lock View',
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _isHovered = true),
-            onExit: (_) => setState(() => _isHovered = false),
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: widget.navigationManager.toggleLock,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: widget.size,
-                height: widget.size,
-                decoration: BoxDecoration(
-                  color: buttonColor,
-                  borderRadius: controlsTheme.borderRadius
-                      .resolve(Directionality.of(context))
-                      .subtract(BorderRadius.circular(4)),
-                ),
-                child: Icon(
-                  isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
-                  size: widget.size * 0.6,
-                  color: iconColor,
+        return Semantics(
+          label: isLocked ? 'Unlock View' : 'Lock View',
+          button: true,
+          child: Tooltip(
+            message: isLocked ? 'Unlock View' : 'Lock View',
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _isHovered = true),
+              onExit: (_) => setState(() => _isHovered = false),
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: widget.navigationManager.toggleLock,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: widget.size,
+                  height: widget.size,
+                  decoration: BoxDecoration(
+                    color: buttonColor,
+                    borderRadius: controlsTheme.borderRadius
+                        .resolve(Directionality.of(context))
+                        .subtract(BorderRadius.circular(4)),
+                  ),
+                  child: Icon(
+                    isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                    size: widget.size * 0.6,
+                    color: iconColor,
+                  ),
                 ),
               ),
             ),

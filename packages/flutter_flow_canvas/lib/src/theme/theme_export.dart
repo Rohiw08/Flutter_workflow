@@ -1,6 +1,3 @@
-/// A barrel file that exports all theme-related components and utilities.
-/// This allows for a single, clean import in other parts of the application.
-
 // Core Theme
 export 'theme.dart';
 

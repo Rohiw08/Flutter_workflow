@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/src/theme/components/handle_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../flutter_flow_canvas.dart';
-import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';
 
 /// A callback function to validate a potential connection.
 typedef IsValidConnectionCallback = bool Function(

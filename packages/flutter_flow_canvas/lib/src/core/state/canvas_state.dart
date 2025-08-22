@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
+import 'package:flutter_flow_canvas/src/core/models/connection_state.dart';
+import 'package:flutter_flow_canvas/src/core/models/edge.dart';
+import 'package:flutter_flow_canvas/src/core/models/node.dart';
+import 'package:flutter_flow_canvas/src/ui/widgets/handle.dart';
 
 class FlowCanvasState {
   // Core data

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_flow_canvas/flutter_flow_canvas.dart';
+import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
+import 'package:flutter_flow_canvas/src/core/enums.dart';
+import 'package:flutter_flow_canvas/src/core/models/node.dart';
 import 'package:flutter_flow_canvas/src/theme/theme.dart';
 import 'package:flutter_flow_canvas/src/theme/theme_utils.dart';
 import 'package:flutter_flow_canvas/src/theme/theme_extensions.dart';

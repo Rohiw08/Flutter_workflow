@@ -1,3 +1,4 @@
+// edge_registry.dart
 import 'package:flutter/material.dart';
 
 import '../models/edge_painter.dart';

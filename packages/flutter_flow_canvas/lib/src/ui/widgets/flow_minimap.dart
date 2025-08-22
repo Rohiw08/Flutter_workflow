@@ -4,6 +4,7 @@ import 'package:flutter_flow_canvas/src/core/canvas_controller.dart';
 import 'package:flutter_flow_canvas/src/core/models/node.dart';
 import 'package:flutter_flow_canvas/src/core/providers.dart';
 import 'package:flutter_flow_canvas/src/theme/components/minimap_theme.dart';
+import 'package:flutter_flow_canvas/src/theme/theme_resolver/minimap_theme_resolver.dart';
 import 'package:flutter_flow_canvas/src/ui/widgets/painters/minimap_painter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -119,12 +120,9 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
   }
 
   FlowCanvasMiniMapTheme _getEffectiveTheme(BuildContext context) {
-    final baseTheme = widget.theme ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? FlowCanvasMiniMapTheme.dark()
-            : FlowCanvasMiniMapTheme.light());
-
-    return baseTheme.copyWith(
+    return resolveMiniMapTheme(
+      context,
+      widget.theme,
       backgroundColor: widget.backgroundColor,
       nodeColor: widget.nodeColor,
       nodeStrokeColor: widget.nodeStrokeColor,
@@ -139,7 +137,6 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
   }
 
   void _onTapUp(FlowCanvasController controller, Offset localPosition) {
-    // Use canvas bounds instead of content bounds
     final canvasBounds = MiniMapPainter.getCanvasBounds(controller);
     final transform = MiniMapPainter.calculateTransform(
       canvasBounds,
@@ -147,7 +144,6 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
       widget.offsetScale,
     );
 
-    // Check for node clicks first
     for (final node in controller.nodes.reversed) {
       final nodeRect = MiniMapPainter.getNodeRect(node, transform);
       if (nodeRect.contains(localPosition)) {
@@ -156,7 +152,6 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
       }
     }
 
-    // Navigate to clicked position
     if (transform.scale > 0) {
       final canvasPosition =
           MiniMapPainter.fromMiniMapToCanvas(localPosition, transform);
@@ -166,7 +161,6 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
 
   void _onPanUpdate(
       DragUpdateDetails details, FlowCanvasController controller) {
-    // Use canvas bounds instead of content bounds
     final canvasBounds = MiniMapPainter.getCanvasBounds(controller);
     final transform = MiniMapPainter.calculateTransform(
       canvasBounds,
@@ -188,7 +182,6 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
   void _onPointerSignal(
       PointerSignalEvent event, FlowCanvasController controller) {
     if (event is PointerScrollEvent) {
-      // Use canvas bounds instead of content bounds
       final canvasBounds = MiniMapPainter.getCanvasBounds(controller);
       final transform = MiniMapPainter.calculateTransform(
         canvasBounds,
@@ -251,7 +244,9 @@ class _FlowCanvasMiniMapState extends ConsumerState<FlowCanvasMiniMap>
                         child: MouseRegion(
                           cursor: widget.pannable
                               ? SystemMouseCursors.grab
-                              : SystemMouseCursors.click,
+                              : widget.zoomable
+                                  ? SystemMouseCursors.click
+                                  : SystemMouseCursors.basic,
                           child: CustomPaint(
                             painter: MiniMapPainter(
                               controller: controller,
