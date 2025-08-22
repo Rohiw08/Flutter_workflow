@@ -8,6 +8,8 @@ class EdgeManager {
 
   EdgeManager(this._state, this._notify);
 
+  List<FlowEdge> get edges => List.unmodifiable(_state.edges);
+
   void addEdge(FlowEdge edge) {
     if (!_state.nodes.any((n) => n.id == edge.sourceNodeId)) {
       throw ArgumentError('Source node "${edge.sourceNodeId}" does not exist');
