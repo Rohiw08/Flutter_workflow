@@ -2,24 +2,26 @@ import 'package:flutter/material.dart';
 import '../../../flutter_flow_canvas.dart';
 import '../state/canvas_state.dart';
 import 'dart:ui' as ui;
+import 'handle_manager.dart';
 
 class NodeManager {
   final FlowCanvasState _state;
   final VoidCallback _notify;
   final NodeRegistry _nodeRegistry;
+  final HandleManager _handleManager;
 
-  NodeManager(this._state, this._notify, this._nodeRegistry);
+  NodeManager(
+      this._state, this._notify, this._nodeRegistry, this._handleManager);
 
-  /// Get a node by its ID.
   FlowNode? getNode(String nodeId) {
     return _state.getNode(nodeId);
   }
 
-  // In FlowCanvasController class
   void dragNode(String nodeId, Offset delta) {
     final node = getNode(nodeId);
     if (node == null) return;
     node.position += delta;
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
@@ -33,6 +35,7 @@ class NodeManager {
     }
     node.position += Offset(_state.canvasWidth / 2, _state.canvasHeight / 2);
     _state.nodes.add(node);
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
@@ -41,7 +44,6 @@ class NodeManager {
       if (_state.nodes.any((n) => n.id == node.id)) {
         throw ArgumentError('Node with id "${node.id}" already exists');
       }
-      // VALIDATION: Check each node type in the list
       if (!_nodeRegistry.isRegistered(node.type)) {
         throw ArgumentError(
             'Node type "${node.type}" is not registered. Please register it in the NodeRegistry before adding nodes.');
@@ -49,15 +51,16 @@ class NodeManager {
       node.position += Offset(_state.canvasWidth / 2, _state.canvasHeight / 2);
       _state.nodes.add(node);
     }
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
-  /// Removes a node and its connected edges from the canvas.
   void removeNode(String nodeId) {
     _state.nodes.removeWhere((node) => node.id == nodeId);
     _state.selectedNodes.remove(nodeId);
     _state.edges.removeWhere(
         (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
@@ -68,6 +71,7 @@ class NodeManager {
       _state.edges.removeWhere(
           (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
     }
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
@@ -79,6 +83,7 @@ class NodeManager {
       _state.edges.removeWhere(
           (edge) => edge.sourceNodeId == nodeId || edge.targetNodeId == nodeId);
     }
+    _handleManager.rebuildSpatialHash();
     _notify();
   }
 
@@ -86,6 +91,7 @@ class NodeManager {
     final node = _state.getNode(nodeId);
     if (node != null) {
       node.position = position;
+      _handleManager.rebuildSpatialHash();
       _notify();
     }
   }
@@ -94,6 +100,7 @@ class NodeManager {
     final node = _state.getNode(nodeId);
     if (node != null) {
       node.size = size;
+      _handleManager.rebuildSpatialHash();
       _notify();
     }
   }
@@ -124,15 +131,23 @@ class NodeManager {
     final node = getNode(nodeId);
     if (node == null) return;
 
+    bool needsRebuild = false;
     if (position != null) {
-      updateNodePosition(nodeId, position);
+      node.position = position;
+      needsRebuild = true;
     }
     if (size != null) {
-      updateNodeSize(nodeId, size);
+      node.size = size;
+      needsRebuild = true;
     }
     if (data != null) {
-      updateNodeData(nodeId, data);
+      node.updateData(data);
     }
+
+    if (needsRebuild) {
+      _handleManager.rebuildSpatialHash();
+    }
+    _notify();
   }
 
   void dragSelectedNodes(Offset canvasDelta) {
@@ -140,6 +155,7 @@ class NodeManager {
       final node = _state.getNode(nodeId);
       node?.position += canvasDelta;
     }
+    // No need to rebuild hash here as it's handled in onPanUpdate
     _notify();
   }
 }

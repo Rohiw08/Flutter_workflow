@@ -130,8 +130,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   void _registerHandle() {
     if (mounted) {
-      controller.connectionManager
-          .registerHandle(widget.nodeId, widget.id, _key);
+      controller.handleManager.registerHandle(widget.nodeId, widget.id, _key);
       _registeredNodeId = widget.nodeId;
       _registeredHandleId = widget.id;
     }
@@ -139,7 +138,7 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
 
   void _unregisterHandle() {
     if (_registeredNodeId != null && _registeredHandleId != null) {
-      controller.connectionManager
+      controller.handleManager
           .unregisterHandle(_registeredNodeId!, _registeredHandleId!);
       _registeredNodeId = null;
       _registeredHandleId = null;
@@ -331,6 +330,8 @@ class HandleState extends ConsumerState<Handle> with TickerProviderStateMixin {
           if (enableAnimations) {
             _scaleController.forward();
           }
+          debugPrint(
+              'Hovered over handle ${widget.id} of node ${widget.nodeId}');
         }
       },
       onExit: (_) {

@@ -6,6 +6,7 @@ import 'managers/edge_manager.dart';
 import 'managers/selection_manager.dart';
 import 'managers/connection_manager.dart';
 import 'managers/navigation_manager.dart';
+import 'managers/handle_manager.dart'; // Import HandleManager
 import 'handlers/interaction_handler.dart';
 import 'handlers/keyboard_handler.dart';
 import 'models/node.dart';
@@ -27,6 +28,7 @@ class FlowCanvasController extends ChangeNotifier {
   late final SelectionManager selectionManager;
   late final ConnectionManager connectionManager;
   late final NavigationManager navigationManager;
+  late final HandleManager handleManager; // Add HandleManager instance
 
   // Handlers
   late final InteractionHandler interactionHandler;
@@ -38,16 +40,12 @@ class FlowCanvasController extends ChangeNotifier {
 
   GlobalKey? interactiveViewerKey;
 
-  // Fixed: Track disposal state to prevent double disposal
   bool _isDisposed = false;
 
-  // Callback for notifying listeners
   late final VoidCallback notify;
 
-  // minimap
   final Rect canvasBounds;
 
-  // Public Getters from State
   List<FlowNode> get nodes => List.unmodifiable(_state.nodes);
   List<FlowEdge> get edges => List.unmodifiable(_state.edges);
   Set<String> get selectedNodes => Set.unmodifiable(_state.selectedNodes);
@@ -67,7 +65,6 @@ class FlowCanvasController extends ChangeNotifier {
     required this.nodeRegistry,
     required this.edgeRegistry,
   }) {
-    // Fixed: Validate canvas dimensions
     if (canvasWidth <= 0 || canvasHeight <= 0) {
       throw ArgumentError('Canvas dimensions must be positive');
     }
@@ -76,19 +73,26 @@ class FlowCanvasController extends ChangeNotifier {
     _state.enableKeyboardShortcuts = enableKeyboardShortcuts;
     _state.enableBoxSelection = enableBoxSelection;
 
-    // Initialize managers and handlers
     notify = () {
       if (!_isDisposed) notifyListeners();
     };
 
     try {
-      nodeManager = NodeManager(_state, notify, nodeRegistry);
+      handleManager = HandleManager(_state);
+      nodeManager = NodeManager(_state, notify, nodeRegistry, handleManager);
       edgeManager = EdgeManager(_state, notify);
       selectionManager = SelectionManager(_state, notify);
-      connectionManager = ConnectionManager(_state, notify, edgeManager);
+      connectionManager =
+          ConnectionManager(_state, notify, edgeManager, handleManager);
       navigationManager = NavigationManager(_state, transformationController);
-      interactionHandler = InteractionHandler(_state, transformationController,
-          notify, selectionManager, nodeManager, navigationManager);
+      interactionHandler = InteractionHandler(
+          _state,
+          transformationController,
+          notify,
+          selectionManager,
+          nodeManager,
+          navigationManager,
+          handleManager);
       keyboardHandler = KeyboardHandler(
           _state, selectionManager, nodeManager, connectionManager);
 
@@ -104,7 +108,6 @@ class FlowCanvasController extends ChangeNotifier {
     _state.interactiveViewerKey = key;
   }
 
-  // Utility methods
   Widget? getNodeWidget(FlowNode node) {
     try {
       return nodeRegistry.buildNodeWidget(node);
@@ -114,7 +117,6 @@ class FlowCanvasController extends ChangeNotifier {
     }
   }
 
-  /// This is useful for features like a minimap or fitting the view.
   Rect getNodesBounds() {
     if (_state.nodes.isEmpty) return Rect.zero;
 
@@ -133,24 +135,19 @@ class FlowCanvasController extends ChangeNotifier {
 
     try {
       _state.clear();
+      handleManager.rebuildSpatialHash();
       notify();
     } catch (e) {
       debugPrint('Error clearing canvas: $e');
     }
   }
 
-  /// Validates the current state and fixes common issues
   void validateAndFixState() {
     if (_isDisposed) return;
 
     try {
-      // Validate transformation matrix
       navigationManager.validateAndFixTransformation();
 
-      // Validate handle registry
-      connectionManager.validateHandleRegistry();
-
-      // Remove any orphaned edges (edges with non-existent nodes)
       final nodeIds = _state.nodes.map((n) => n.id).toSet();
       final edgesToRemove = <FlowEdge>[];
 
@@ -165,7 +162,6 @@ class FlowCanvasController extends ChangeNotifier {
         edgeManager.removeEdge(edge.id);
       }
 
-      // Remove invalid selected nodes
       final validSelectedNodes =
           _state.selectedNodes.where((id) => nodeIds.contains(id)).toSet();
 
@@ -182,7 +178,6 @@ class FlowCanvasController extends ChangeNotifier {
   @override
   void dispose() {
     if (_isDisposed) return;
-
     _isDisposed = true;
 
     try {

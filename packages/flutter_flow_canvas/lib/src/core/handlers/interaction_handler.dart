@@ -6,6 +6,7 @@ import '../models/node.dart';
 import '../managers/selection_manager.dart';
 import '../managers/node_manager.dart';
 import '../managers/navigation_manager.dart';
+import '../managers/handle_manager.dart';
 
 class InteractionHandler {
   final FlowCanvasState _state;
@@ -14,6 +15,7 @@ class InteractionHandler {
   final SelectionManager _selectionManager;
   final NodeManager _nodeManager;
   final NavigationManager _navigationManager;
+  final HandleManager _handleManager;
 
   InteractionHandler(
     this._state,
@@ -22,6 +24,7 @@ class InteractionHandler {
     this._selectionManager,
     this._nodeManager,
     this._navigationManager,
+    this._handleManager,
   );
 
   void onPanStart(DragStartDetails details) {
@@ -78,6 +81,7 @@ class InteractionHandler {
       case DragMode.node:
         final canvasDelta = currentCanvasOffset - _state.lastCanvasPosition!;
         _nodeManager.dragSelectedNodes(canvasDelta);
+        _handleManager.rebuildSpatialHash();
         _state.lastCanvasPosition = currentCanvasOffset;
         break;
       case DragMode.selection:

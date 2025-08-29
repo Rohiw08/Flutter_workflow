@@ -94,6 +94,7 @@ class ImageNodeWidget extends StatelessWidget {
             id: 'bottom',
             position: HandlePosition.bottom,
             type: HandleType.source,
+            size: 20,
           ),
         ],
       ),

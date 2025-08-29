@@ -20,7 +20,7 @@ class FlowPainter extends CustomPainter {
   Offset? _getHandlePosition(String nodeId, String handleId) {
     // Original logic preserved
     final handleGlobalPos =
-        controller.connectionManager.getHandleGlobalPosition(nodeId, handleId);
+        controller.handleManager.getHandleGlobalPosition(nodeId, handleId);
     if (handleGlobalPos == null) {
       return null;
     }

@@ -1,12 +1,14 @@
 import 'dart:math';
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import '../../ui/widgets/handle.dart';
-import '../state/canvas_state.dart';
+
+import 'package:flutter/material.dart'
+    show debugPrint, RenderBox, VoidCallback, Offset;
+
+import '../enums.dart';
 import '../models/connection_state.dart';
 import '../models/edge.dart';
-import '../enums.dart';
+import '../state/canvas_state.dart';
 import 'edge_manager.dart';
+import 'handle_manager.dart';
 
 /// Generates a unique edge ID using timestamp and random components
 String _generateUniqueEdgeId() {
@@ -19,57 +21,20 @@ class ConnectionManager {
   final FlowCanvasState _state;
   final VoidCallback _notify;
   final EdgeManager _edgeManager;
+  final HandleManager _handleManager;
 
-  ConnectionManager(this._state, this._notify, this._edgeManager);
+  // New property for snap radius
+  final double snapRadius;
+
+  ConnectionManager(
+    this._state,
+    this._notify,
+    this._edgeManager,
+    this._handleManager, {
+    this.snapRadius = 20.0,
+  });
 
   FlowConnectionState? get connection => _state.connection;
-
-  // === HANDLE MANAGEMENT ===
-
-  void registerHandle(
-      String nodeId, String handleId, GlobalKey<HandleState> key) {
-    _state.handleRegistry['$nodeId/$handleId'] = key;
-    _notify();
-  }
-
-  void unregisterHandle(String nodeId, String handleId) {
-    _state.handleRegistry.remove('$nodeId/$handleId');
-  }
-
-  /// Get global position of a handle with safe type checking
-  Offset? getHandleGlobalPosition(String nodeId, String handleId) {
-    final key = _state.handleRegistry['$nodeId/$handleId'];
-    final context = key?.currentContext;
-
-    if (context == null || !context.mounted) {
-      return null;
-    }
-    try {
-      final renderObject = context.findRenderObject();
-
-      if (renderObject == null || renderObject is! RenderBox) {
-        return null;
-      }
-
-      final renderBox = renderObject;
-
-      if (!renderBox.attached) {
-        return null;
-      }
-
-      final size = renderBox.size;
-
-      if (size.width <= 0 || size.height <= 0) {
-        return null;
-      }
-
-      return renderBox.localToGlobal(Offset(size.width / 2, size.height / 2));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // === CONNECTION MANAGEMENT ===
 
   void startConnection(
       String fromNodeId, String fromHandleId, Offset startPosition) {
@@ -87,119 +52,93 @@ class ConnectionManager {
     if (connection == null) return;
     connection!.endPosition = globalPosition;
 
-    String? finalHoveredKey;
-    bool isConnectionValid = false;
+    String? hoveredKey;
+    bool connectionIsValid = true;
 
-    final hitTestResult = BoxHitTestResult();
+    // Force rebuild spatial hash to ensure it's current
+    _handleManager.rebuildSpatialHash();
 
-    // 1. Iterate through all registered handles to find a potential target
-    for (final entry in _state.handleRegistry.entries) {
-      // Prevent connecting to the same handle the connection started from
+    // We use the spatial hash for a coarse search
+    final nearbyHandles = _handleManager.getHandlesNear(globalPosition);
+
+    for (final handleKey in nearbyHandles) {
       if ('${connection!.fromNodeId}/${connection!.fromHandleId}' ==
-          entry.key) {
+          handleKey) {
         continue;
       }
 
-      try {
-        final context = entry.value.currentContext;
-        if (context == null || !context.mounted) continue;
+      final handleState = _handleManager.getHandleState(handleKey);
+      if (handleState == null) {
+        continue;
+      }
 
-        final renderBox = context.findRenderObject() as RenderBox?;
-        if (renderBox == null || !renderBox.attached) continue;
+      final renderBox = handleState.context.findRenderObject() as RenderBox?;
+      if (renderBox == null || !renderBox.attached) {
+        continue;
+      }
 
-        // 2. Perform hit-test
-        if (renderBox.hitTest(hitTestResult,
-            position: renderBox.globalToLocal(globalPosition))) {
-          final targetHandleWidget = entry.value.currentWidget as Handle?;
+      final handleCenter =
+          renderBox.localToGlobal(renderBox.size.center(Offset.zero));
+      final distance = (globalPosition - handleCenter).distance;
 
-          if (targetHandleWidget != null &&
-              targetHandleWidget.type != HandleType.source) {
-            // Assume valid until custom validation proves otherwise
-            isConnectionValid = true;
-            finalHoveredKey = entry.key; // Tentatively set the hovered key
-
-            // If a custom validation callback exists, use it
-            if (targetHandleWidget.onValidateConnection != null) {
-              final targetKeyParts = entry.key.split('/');
-              isConnectionValid = targetHandleWidget.onValidateConnection!(
-                connection!.fromNodeId,
-                connection!.fromHandleId,
-                targetKeyParts[0],
-                targetKeyParts[1],
-              );
-            }
+      // Check if the cursor is within the snapRadius.
+      if (distance <= snapRadius) {
+        final targetHandleWidget = handleState.widget;
+        if (targetHandleWidget.type != HandleType.source) {
+          bool customValidationPassed = true;
+          if (targetHandleWidget.onValidateConnection != null) {
+            final targetKeyParts = handleKey.split('/');
+            customValidationPassed = targetHandleWidget.onValidateConnection!(
+              connection!.fromNodeId,
+              connection!.fromHandleId,
+              targetKeyParts[0],
+              targetKeyParts[1],
+            );
           }
 
-          // If a valid handle is found and the connection is valid, break the loop
-          if (isConnectionValid) {
+          if (customValidationPassed) {
+            connectionIsValid = true;
+            hoveredKey = handleKey;
             break;
-          } else {
-            // If custom validation failed, reset the key
-            finalHoveredKey = null;
           }
         }
-      } catch (e) {
-        debugPrint('Error in hit testing for handle ${entry.key}: $e');
-        continue;
       }
     }
 
-    // 4. Update the connection state
-    connection!.isValid = isConnectionValid;
-    connection!.hoveredTargetKey = isConnectionValid ? finalHoveredKey : null;
+    connection!.isValid = connectionIsValid;
+    connection!.hoveredTargetKey = hoveredKey;
 
     _notify();
   }
 
-  // In ConnectionManager class
-
   void endConnection() {
-    if (_state.connection?.hoveredTargetKey != null) {
+    // Re-run updateConnection one last time to get the absolute final state
+    if (_state.connection != null) {
+      updateConnection(_state.connection!.endPosition);
+    }
+
+    if (_state.connection != null &&
+        _state.connection!.isValid &&
+        _state.connection!.hoveredTargetKey != null) {
       try {
         final targetKeyParts = _state.connection!.hoveredTargetKey!.split('/');
-        if (targetKeyParts.length != 2) {
-          debugPrint(
-              'Invalid target key format: ${_state.connection!.hoveredTargetKey}');
-          _cancelConnectionInternal();
-          return;
-        }
-
         final sourceNodeId = _state.connection!.fromNodeId;
         final sourceHandleId = _state.connection!.fromHandleId;
         final targetNodeId = targetKeyParts[0];
         final targetHandleId = targetKeyParts[1];
 
-        // --- START: NEW VALIDATION LOGIC ---
-        final targetHandleKey =
-            _state.handleRegistry[_state.connection!.hoveredTargetKey!];
-        final targetHandleWidget = targetHandleKey?.currentWidget as Handle?;
-
-        bool isConnectionValid = true; // Default to true
-        if (targetHandleWidget?.onValidateConnection != null) {
-          isConnectionValid = targetHandleWidget!.onValidateConnection!(
-            sourceNodeId,
-            sourceHandleId,
-            targetNodeId,
-            targetHandleId,
-          );
-        }
-        // --- END: NEW VALIDATION LOGIC ---
-
-        if (isConnectionValid) {
-          final newEdge = FlowEdge(
-            id: _generateUniqueEdgeId(),
-            sourceNodeId: sourceNodeId,
-            sourceHandleId: sourceHandleId,
-            targetNodeId: targetNodeId,
-            targetHandleId: targetHandleId,
-          );
-          _edgeManager.addEdge(newEdge);
-        }
+        final newEdge = FlowEdge(
+          id: _generateUniqueEdgeId(),
+          sourceNodeId: sourceNodeId,
+          sourceHandleId: sourceHandleId,
+          targetNodeId: targetNodeId,
+          targetHandleId: targetHandleId,
+        );
+        _edgeManager.addEdge(newEdge);
       } catch (e) {
         debugPrint('Error creating edge: $e');
       }
     }
-
     _cancelConnectionInternal();
   }
 
@@ -211,29 +150,5 @@ class ConnectionManager {
     _state.connection = null;
     _state.dragMode = DragMode.none;
     _notify();
-  }
-
-  void validateHandleRegistry() {
-    final invalidHandles = <String>[];
-
-    for (final entry in _state.handleRegistry.entries) {
-      final handleKey = entry.key;
-      final globalKey = entry.value;
-
-      if (globalKey.currentContext == null ||
-          !globalKey.currentContext!.mounted) {
-        invalidHandles.add(handleKey);
-        continue;
-      }
-    }
-
-    for (final handleKey in invalidHandles) {
-      _state.handleRegistry.remove(handleKey);
-      debugPrint('Removed invalid handle: $handleKey');
-    }
-
-    if (invalidHandles.isNotEmpty) {
-      _notify();
-    }
   }
 }

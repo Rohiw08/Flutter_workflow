@@ -59,24 +59,24 @@ class FlowCanvasDemo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(flowControllerProvider);
+    final controller = ref.watch(flowControllerProvider);
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Flutter Flow Canvas Demo'),
-      //   actions: [
-      //     IconButton(
-      //       icon: const Icon(Icons.add_circle_outline),
-      //       onPressed: () => _addRandomNode(controller),
-      //       tooltip: 'Add Random Node',
-      //     ),
-      //     IconButton(
-      //       icon: const Icon(Icons.delete_sweep_outlined),
-      //       onPressed: controller.clear,
-      //       tooltip: 'Clear Canvas',
-      //     ),
-      //   ],
-      // ),
+      appBar: AppBar(
+        title: const Text('Flutter Flow Canvas Demo'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: () => _addRandomNode(controller),
+            tooltip: 'Add Random Node',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            onPressed: controller.clear,
+            tooltip: 'Clear Canvas',
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           const FlowBackground(),
